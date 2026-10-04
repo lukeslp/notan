@@ -57,12 +57,13 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#settings-sizes [aria-pressed="true"]').textContent(), '8');
       await page.keyboard.press('Escape');
       await page.locator('#lvl-btn').click();
-      const row = await page.locator('#sizes').boundingBox();
-      assert(row.y >= 0 && row.y + row.height < viewport.height);
+      assert.equal(await page.locator('#levels #sizes').count(), 0);
       if (viewport.width === 390) assert.deepEqual(await page.locator('#levels').boundingBox(), { x: 0, y: 0, ...viewport });
       await page.screenshot({ path: `/tmp/notan-levels-${viewport.width}-${colorScheme}.png` });
-      await page.locator('#sizes button', { hasText: /^5$/ }).click();
-      await page.waitForFunction(() => document.activeElement.id === 'lvl-btn');
+      await page.keyboard.press('Escape');
+      await page.locator('#settings-btn').click();
+      await page.locator('#settings-sizes button', { hasText: /^5$/ }).click();
+      await page.waitForFunction(() => document.querySelector('#lvl-text').textContent === '∞ 5');
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 5');
       // Solve through real keyboard input, using the engine only to identify filled cells.
       async function solve() {
@@ -89,15 +90,15 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 5');
       assert.notEqual(await page.evaluate(() => window.__notan.S.puz.seed), seed);
       await solve();
-      await page.locator('#solved-sizes button', { hasText: /^12$/ }).click();
+      await page.locator('#settings-btn').click();
+      await page.locator('#settings-sizes button', { hasText: /^12$/ }).click();
+      assert.equal(await page.locator('#solved-sizes').count(), 0);
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 12');
       await page.locator('#lvl-btn').click(); await page.locator('.lv').nth(27).click();
       await page.waitForFunction(() => document.activeElement.id === 'lvl-btn');
       await solve();
       assert.equal(await page.locator('#cap-name').textContent(), 'Leaf');
       await page.screenshot({ path: `/tmp/notan-leaf-${viewport.width}-${colorScheme}.png` });
-      const quick = await page.locator('#solved-sizes').boundingBox();
-      assert(quick.y + quick.height < viewport.height - 54);
       await page.locator('#next-btn').click();
       assert.equal(await page.locator('#lvl-text').textContent(), '29');
       await page.locator('#help-btn').click();

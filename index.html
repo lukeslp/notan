@@ -59,7 +59,6 @@ try {
     <button type="button" class="ib" id="next-btn" aria-label="Next level">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </button>
-    <div class="quick-row"><span id="solved-quick-title">Quick play</span><div class="sizes" id="solved-sizes" role="group" aria-labelledby="solved-quick-title"></div></div>
   </div>
 
   <div class="bar">
@@ -122,7 +121,7 @@ try {
         <li><b>Arrows</b> move · <b>Space / Enter</b> fill · <b>X</b> mark · <b>Delete</b> clear · <b>Z</b> undo · <b>?</b> help. Hold <b>Shift</b> with an arrow to paint.</li>
         <li>A number fades when its run is closed off by a dot or the edge. Only the finished picture confirms the solution.</li>
         <li>Bottom left: undo, start over, mark mode (taps mark instead of fill). Tap the level number to pick a level.</li>
-        <li>Settings, bottom right, has Quick play (a fresh board at the size you choose), Zoom, the light or dark theme, and Reset. Quick play is also in the level list and after every puzzle.</li>
+        <li>Settings, bottom right, has Quick play (a fresh board at the size you choose), Zoom, the light or dark theme, and Reset.</li>
         <li>To open Settings from anywhere, hold the empty background.</li>
       </ul>
     </details>
@@ -135,10 +134,7 @@ try {
 <dialog class="sheet" id="levels" aria-labelledby="levels-title">
   <div class="sheet-in">
     <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
-    <h2 id="levels-title">Play</h2>
-    <h3 id="quick-title">Quick play</h3>
-    <div class="sizes" id="sizes" role="group" aria-labelledby="quick-title"></div>
-    <h3>Levels</h3>
+    <h2 id="levels-title">Levels</h2>
     <p class="sr-only" id="lv-meta"></p>
     <ol class="lv-grid" id="lv-grid"></ol>
   </div>

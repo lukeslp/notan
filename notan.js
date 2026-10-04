@@ -753,7 +753,7 @@
   appearance();
 
   function renderQuickChoices() {
-    [sizesEl, $('#settings-sizes'), $('#solved-sizes')].forEach((row) => {
+    [sizesEl, $('#settings-sizes'), $('#solved-sizes')].filter(Boolean).forEach((row) => {
       row.replaceChildren();
       SIZES.forEach((n) => {
         const b = el('button', 'size-choice');
@@ -795,7 +795,7 @@
     });
     lvMeta.textContent = solved + ' of ' + RAMP.length + ' solved';
     showSheet(levels, atEnd ? nextBtn : lvlBtn);
-    sizesEl.querySelector('[aria-pressed="true"]').focus({ preventScroll: true });
+    (lvGrid.querySelector('[aria-current="true"]') || lvGrid.querySelector('button'))?.focus({ preventScroll: true });
 
   }
 
