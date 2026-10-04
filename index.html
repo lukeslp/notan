@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css">
+<link rel="stylesheet" href="./notan.css?v=8af8de38">
 </head>
 <body>
 <main id="app">
@@ -52,7 +52,7 @@ try {
     <div class="cursor" aria-hidden="true"></div>
     <div class="grid" id="grid" role="grid" aria-describedby="grid-keys"></div>
   </div>
-  <p id="grid-keys" class="sr-only">Arrow keys move. Space fills a square, X marks it empty, Delete clears it, Z undoes. Hold Shift with an arrow to paint.</p>
+  <p id="grid-keys" class="sr-only">Arrow keys move. Space fills a square, X marks it empty, Delete clears it, Z undoes. Hold Shift with an arrow to paint. L locks or unlocks the row; Shift+L the column.</p>
 
   <div class="caption" id="caption" hidden>
     <p id="cap-name"></p>
@@ -98,12 +98,16 @@ try {
         <span class="eg-note">3 1 in five squares fits one way: three, a gap, one.</span>
       </li>
       <li>
-        <span class="eg-row" aria-hidden="true"><span class="eg-clue">4</span><span class="eg-cells"><i class="q"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="q"></i></span></span>
-        <span class="eg-note">4 in five starts at either end, so the middle three are filled either way.</span>
+        <span class="eg-row" aria-hidden="true"><span class="eg-clue">4</span><span class="eg-cells span4"><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span>
+        <span class="eg-note">A 4 in five squares sits in one of two places (the bars). The middle three are filled either way.</span>
       </li>
       <li>
         <span class="eg-row" aria-hidden="true"><span class="eg-clue">3</span><span class="eg-cells"><i class="q"></i><i class="q"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span>
         <span class="eg-note">Hold a square (or right-click it) to mark it empty with a dot, once you know it can't be filled.</span>
+      </li>
+      <li>
+        <span class="eg-row" aria-hidden="true"><span class="eg-clue locked">5</span><span class="eg-cells"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span>
+        <span class="eg-note">Hold a row's or column's numbers (or right-click them) to lock a finished line, so stray taps can't change it. Hold again to unlock.</span>
       </li>
     </ul>
     <ul class="keys">
@@ -112,6 +116,7 @@ try {
       <li>A number fades once its run is finished and closed off by a dot or the edge. That's your bookkeeping, not a check: only the finished picture says you're right.</li>
       <li>Drag to fill a line, or a block: drag across and down.</li>
       <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
+      <li><b>L</b> locks or unlocks the focused square’s row; <b>Shift+L</b> its column.</li>
       <li>Bottom left: undo, start over, and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
       <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. Hold the empty background to open it from anywhere.</li>
     </ul>
@@ -143,6 +148,10 @@ try {
     <h3 id="zoom-title">Zoom</h3>
     <div class="sizes" id="zoom-sizes" role="group" aria-labelledby="zoom-title"></div>
     <button type="button" class="ib" id="theme-btn" aria-label="Theme: system. Switch to light."></button>
+    <div class="sheet-foot">
+      <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
+      <a class="foot-btn" href="https://lukesteuber.com/downloads/">lukesteuber.com/downloads</a>
+    </div>
   </div>
 </dialog>
 
@@ -157,9 +166,9 @@ try {
   </div>
 </dialog>
 
-<script src="./engine.js"></script>
-<script src="./levels.js"></script>
-<script src="./notan.js"></script>
+<script src="./engine.js?v=edf79bce"></script>
+<script src="./levels.js?v=0687d7bc"></script>
+<script src="./notan.js?v=a3443871"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>
 </html>

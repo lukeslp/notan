@@ -384,6 +384,11 @@ dialog.sheet::backdrop { background: var(--scrim); }
 .eg-cells i { width: 16px; height: 16px; border-right: 1px solid var(--line); position: relative; }
 .eg-cells i:last-child { border-right: 0; }
 .eg-cells i.on { background: var(--ink); border-right-color: var(--ink); }
+/* The "4" example: bars above and below mark the run's two possible places. */
+.eg-cells.span4 { position: relative; margin: 6px 0; }
+.eg-cells.span4::before, .eg-cells.span4::after { content: ""; position: absolute; height: 2px; width: 64px; background: var(--sub); }
+.eg-cells.span4::before { top: -6px; left: -1px; }
+.eg-cells.span4::after { bottom: -6px; right: -1px; }
 .eg-cells i.q::after {
   content: ""; position: absolute; left: 50%; top: 50%;
   width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--mark);
@@ -470,3 +475,10 @@ dialog.sheet::backdrop { background: var(--scrim); }
 #theme-btn svg { width: 20px; height: 20px; }
 #reset-confirm .sizes { align-items: center; }
 .size-choice:hover { background: var(--band); }
+
+/* Quiet rules beside locked clues, independent of completion and conflict ticks. */
+.clue.locked::before, .eg-clue.locked::before { content: ""; position: absolute; background: var(--sub); }
+.rc.locked::before { width: 2px; right: 3px; top: 25%; bottom: 25%; }
+.cc.locked::before { height: 2px; bottom: 3px; left: 25%; right: 25%; }
+.eg-clue.locked { position: relative; color: var(--done); }
+.eg-clue.locked::before { width: 2px; right: -5px; top: 0; bottom: 0; }

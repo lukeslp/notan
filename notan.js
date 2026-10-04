@@ -61,7 +61,7 @@
 
   /* ---------- state + elements ---------- */
   const S = {
-    puz: null, cells: null, undo: [], solved: false, solvedAt: 0,
+    puz: null, cells: null, undo: [], locks: { row: [], col: [] }, solved: false, solvedAt: 0,
     time: 0, focus: 0, mark: save.mark, drag: null, pending: null,
     kbd: false, geo: null, lastTo: null,
   };
@@ -109,6 +109,8 @@
     stopClock();
     S.puz = puz;
     S.undo = [];
+    cancelClueHold();
+    S.locks = { row: Array(puz.h).fill(false), col: Array(puz.w).fill(false) };
     S.solved = false;
     S.drag = null;
     if (S.pending) { clearTimeout(S.pending.timer); S.pending = null; }
@@ -122,11 +124,15 @@
     if (saved && typeof saved.c === 'string' && saved.c.length === n) {
       for (let i = 0; i < n; i++) { const v = saved.c.charCodeAt(i) - 48; S.cells[i] = v === 1 || v === 2 ? v : 0; }
       S.time = Math.max(0, saved.t | 0);
+      for (const kind of ['row', 'col']) {
+        const locks = saved.locks && saved.locks[kind];
+        S.locks[kind] = S.locks[kind].map((_, i) => Array.isArray(locks) && locks[i] === true);
+      }
     }
     if (puz.endless) {
       save.quickSize = puz.size;
       save.at = 'endless';
-      save.endless = { size: puz.size, seed: puz.seed, c: saved ? saved.c : '', t: S.time };
+      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks };
     } else save.at = puz.id;
     persist();
     renderQuickChoices();
@@ -243,7 +249,8 @@
     const v = S.cells[i], d = cellEls[i], w = S.puz.w;
     d.classList.toggle('ink', v === INK);
     d.classList.toggle('mark', v === MARK);
-    d.setAttribute('aria-label', 'Row ' + (Math.floor(i / w) + 1) + ', column ' + (i % w + 1) + ': ' + STATE[v]);
+    d.setAttribute('aria-readonly', String(isLocked(i)));
+    d.setAttribute('aria-label', 'Row ' + (Math.floor(i / w) + 1) + ', column ' + (i % w + 1) + ': ' + STATE[v] + (isLocked(i) ? ', locked' : ''));
   }
   function lineOf(kind, k) {
     const { w, h } = S.puz;
@@ -271,9 +278,10 @@
       if (animate && done && !n.classList.contains('n-done')) pop(n);
       n.classList.toggle('n-done', done);
     });
+    head.classList.toggle('locked', S.locks[kind][k]);
     head.classList.toggle('ok', ok);
     head.classList.toggle('bad', bad);
-    const name = (kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + ' clue ' + (clue.length ? clue.join(' ') : '0');
+    const name = (kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + (S.locks[kind][k] ? ', locked' : ', unlocked') + ', clue ' + (clue.length ? clue.join(' ') : '0');
     head.setAttribute('aria-label', name + (ok ? ', done' : bad ? ', cannot fit as marked' : count ? ', ' + count + ' of ' + clue.length + ' numbers done' : ''));
     return ok;
   }
@@ -334,10 +342,22 @@
     if (!S.puz || S.solved) return;
     const c = Array.from(S.cells).join('');
     const blank = !S.cells.some((v) => v);
-    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c: blank ? '' : c, t: S.time };
-    else if (blank && !S.time) delete save.boards[S.puz.id];
-    else save.boards[S.puz.id] = { c, t: S.time };
+    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks };
+    else if (blank && !S.time && !S.locks.row.some(Boolean) && !S.locks.col.some(Boolean)) delete save.boards[S.puz.id];
+    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks };
     persist();
+  }
+
+  function isLocked(i) {
+    return S.locks.row[Math.floor(i / S.puz.w)] || S.locks.col[i % S.puz.w];
+  }
+  function toggleLock(kind, k) {
+    if (S.solved || S.drag || S.pending) return;
+    S.locks[kind][k] = !S.locks[kind][k];
+    clearNudge();
+    renderAll();
+    storeBoard();
+    announce((kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + (S.locks[kind][k] ? ', locked' : ', unlocked'));
   }
 
   /* ---------- moves ---------- */
@@ -362,7 +382,7 @@
 
   /* A single keyboard move. */
   function act(i, to) {
-    if (S.solved || S.cells[i] === to) return;
+    if (S.solved || isLocked(i) || S.cells[i] === to) return;
     pushUndo(Int8Array.from(S.cells));
     S.cells[i] = to;
     S.lastTo = to;
@@ -376,6 +396,7 @@
    * (a line when it stays in one row or column), to squares in the same
    * state, rubber-banding as the pointer moves back. */
   function begin(i, kind, pid) {
+    if (S.solved || isLocked(i)) return;
     const from = S.cells[i];
     const to = kind === 'alt' ? altOf(from) : tapOf(from);
     S.drag = { id: pid, start: i, from, to, snap: Int8Array.from(S.cells), painted: [] };
@@ -392,7 +413,7 @@
     for (let r = Math.min(r0, r1); r <= Math.max(r0, r1); r++)
       for (let c = Math.min(c0, c1); c <= Math.max(c0, c1); c++) span.push(r * w + c);
     const tip = j;
-    const want = new Set(span.filter((k) => d.snap[k] === d.from));
+    const want = new Set(span.filter((k) => !isLocked(k) && d.snap[k] === d.from));
     const touched = [];
     d.painted.forEach((k) => { if (!want.has(k)) { S.cells[k] = d.snap[k]; touched.push(k); } });
     want.forEach((k) => { if (S.cells[k] !== d.to) { S.cells[k] = d.to; touched.push(k); } });
@@ -424,13 +445,12 @@
   }
   function startOver() {
     if (S.solved) { open(S.puz); announce(label(S.puz) + ' again'); return; }
-    if (!S.cells.some((v) => v)) { announce('The board is already blank'); return; }
+    const hadLocks = S.locks.row.some(Boolean) || S.locks.col.some(Boolean);
+    S.locks.row.fill(false); S.locks.col.fill(false);
+    if (!S.cells.some((v) => v) && !hadLocks) { announce('The board is already blank'); return; }
     pushUndo(Int8Array.from(S.cells));
-    const diff = [];
-    S.cells.forEach((v, i) => { if (v) diff.push(i); });
     S.cells.fill(0);
-    diff.forEach(renderCell);
-    updateLines(diff);
+    renderAll();
     storeBoard();
     hud();
     announce('Board cleared. Undo brings it back.');
@@ -439,6 +459,8 @@
   /* ---------- solved ---------- */
   function finish(quiet) {
     S.solved = true;
+    S.locks.row.fill(false); S.locks.col.fill(false);
+    renderAll();
     S.solvedAt = performance.now();
     stopClock();
     const p = S.puz;
@@ -508,11 +530,38 @@
     else if (c < 0 || r < 0 || c >= w || r >= h) return -1;
     return r * w + c;
   }
+  let clueHold = null, heldClue = null;
+  function cancelClueHold() {
+    if (clueHold) clearTimeout(clueHold.timer);
+    clueHold = null;
+  }
+  function clueLine(target) {
+    const head = target.closest('.clue');
+    if (!head || !grid.contains(head)) return null;
+    const kind = head.classList.contains('rc') ? 'row' : 'col';
+    return { kind, k: (kind === 'row' ? rowHeads : colHeads).indexOf(head), head };
+  }
+  document.addEventListener('pointerdown', cancelClueHold, true);
   board.addEventListener('pointerdown', (e) => {
     if (S.solved || !S.geo) return;
     if (e.button !== 0 && e.button !== 2) return;
+    const clue = clueLine(e.target);
+    if (clue) {
+      heldClue = null;
+      if (!e.isPrimary || e.button !== 0) return;
+      e.preventDefault();
+      const hold = { ...clue, id: e.pointerId, x: e.clientX, y: e.clientY };
+      hold.timer = setTimeout(() => {
+        clueHold = null;
+        heldClue = hold.head;
+        toggleLock(hold.kind, hold.k);
+      }, 500);
+      clueHold = hold;
+      try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
+      return;
+    }
     const i = cellAt(e.clientX, e.clientY);
-    if (i < 0) return;
+    if (i < 0 || isLocked(i) || !e.isPrimary) return;
     e.preventDefault();
     S.kbd = false;
     try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
@@ -529,6 +578,10 @@
     } else begin(i, e.button === 2 ? 'alt' : 'tap', e.pointerId);
   });
   board.addEventListener('pointermove', (e) => {
+    if (clueHold && e.pointerId === clueHold.id) {
+      if (Math.hypot(e.clientX - clueHold.x, e.clientY - clueHold.y) >= 10) cancelClueHold();
+      return;
+    }
     if (S.solved || !S.geo) return;
     if (S.pending && e.pointerId === S.pending.id) {
       const j = cellAt(e.clientX, e.clientY, true);
@@ -545,6 +598,7 @@
     if (e.pointerType === 'mouse') { const i = cellAt(e.clientX, e.clientY); showBands(i); }
   });
   function pointerEnd(e) {
+    if (clueHold && e.pointerId === clueHold.id) cancelClueHold();
     if (S.pending && e.pointerId === S.pending.id) {
       const p = S.pending;
       clearTimeout(p.timer);
@@ -560,7 +614,14 @@
   board.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'mouse' && !S.drag) showBands(grid.contains(document.activeElement) ? S.focus : -1);
   });
-  board.addEventListener('contextmenu', (e) => e.preventDefault());
+  // Release still cancels a hold if pointer capture was unavailable.
+  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, cancelClueHold));
+  window.addEventListener('blur', cancelClueHold);
+  board.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    const clue = clueLine(e.target);
+    if (clue && heldClue !== clue.head) { cancelClueHold(); toggleLock(clue.kind, clue.k); }
+  });
 
   /* Any pointer press ends keyboard mode (hides the keyboard cursor). */
   document.addEventListener('pointerdown', () => { if (S.kbd) { S.kbd = false; placeCursor(); } }, true);
@@ -601,7 +662,11 @@
   }, true);
 
   /* ---------- keyboard ---------- */
-  grid.addEventListener('focusin', () => { showBands(S.focus); placeCursor(); });
+  grid.addEventListener('focusin', (e) => {
+    const i = cellEls.indexOf(e.target);
+    if (i >= 0) setFocus(i, false);
+    showBands(S.focus); placeCursor();
+  });
   grid.addEventListener('focusout', () => {
     setTimeout(() => { if (!grid.contains(document.activeElement)) { placeCursor(); showBands(-1); } }, 0);
   });
@@ -618,6 +683,7 @@
       case 'Home': c = 0; if (e.ctrlKey) r = 0; moved = true; break;
       case 'End': c = w - 1; if (e.ctrlKey) r = h - 1; moved = true; break;
       case ' ': case 'Enter': act(i, S.cells[i] === INK ? BLANK : INK); break;
+      case 'l': case 'L': if (!e.ctrlKey && !e.metaKey && !e.altKey) { if (!e.repeat) toggleLock(e.shiftKey ? 'col' : 'row', e.shiftKey ? c : r); } else handled = false; break;
       case 'x': case 'X': act(i, S.cells[i] === MARK ? BLANK : MARK); break;
       case 'Delete': case 'Backspace': act(i, BLANK); break;
       default: handled = false;
