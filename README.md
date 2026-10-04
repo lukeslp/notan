@@ -9,6 +9,7 @@ Play it at <https://dr.eamer.dev/games/notan/>.
 
 - 53 levels, from a 2×2 square up to 15×15. Every level has exactly one solution, and you can
   reach it line by line without guessing.
+- New Game+: 20 harder, asymmetric pictures that unlock after level 53.
 - Quick play: random boards at 5, 8, 10, 12 or 15 squares a side. The generator keeps only boards
   with one solution that can be solved line by line, and the same seed always gives the same board.
 - How to play teaches with three small rows you fill in yourself.
@@ -35,6 +36,7 @@ Then open <http://localhost:8000/>.
 | `notan.js` | The game: board, input, saves, Settings, Quick play |
 | `engine.js` | Clues, the line solver, solution counting and the random board generator |
 | `levels.js` | The 53 level pictures, drawn as rows of `#` and `.` |
+| `plus-levels.js` | The 20 New Game+ pictures, unlocked after level 53 |
 | `notan.css` | The look, in light and dark |
 | `fonts/` | IBM Plex Sans and IBM Plex Mono |
 
