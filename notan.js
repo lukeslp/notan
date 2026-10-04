@@ -1,0 +1,838 @@
+/* Notan: the page. Builds the board as an ARIA grid (column clues are column
+ * headers, row clues are row headers), handles tap / drag / long-press /
+ * keyboard input, saves progress, and plays the solved reveal.
+ * Needs engine.js (window.InkEngine) and levels.js (window.InkLevels). */
+(function () {
+  'use strict';
+  const E = window.InkEngine;
+  const LEVELS = window.InkLevels;
+  const SIZES = [5, 8, 10, 12, 15];
+  const BLANK = 0, INK = 1, MARK = 2;
+  const STATE = ['blank', 'filled', 'marked empty'];
+  const KEY = 'ink.v1'; // the game was called Ink until 2026-10-04; the key stays so progress carries over
+  const HOLD_MS = 380;
+  const $ = (s) => document.querySelector(s);
+
+  /* ---------- storage (everything optional; private mode just doesn't save) ---------- */
+  function readSave() {
+    try {
+      const v = JSON.parse(localStorage.getItem(KEY) || 'null');
+      return v && typeof v === 'object' ? v : {};
+    } catch (e) { return {}; }
+  }
+  const raw = readSave();
+  const obj = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+  const save = {
+    at: typeof raw.at === 'string' ? raw.at : null,
+    solved: obj(raw.solved),
+    boards: obj(raw.boards),
+    endless: raw.endless && typeof raw.endless === 'object' ? raw.endless : null,
+    seen: !!raw.seen,
+    mark: !!raw.mark,
+    quickSize: SIZES.includes(raw.quickSize) ? raw.quickSize : 10,
+    zoom: [100, 115, 130, 150].includes(raw.zoom) ? raw.zoom : 100,
+    theme: ['light', 'dark'].includes(raw.theme) ? raw.theme : 'system',
+  };
+  // The redrawn leaf keeps credit for its slot, never the old board's cells.
+  if (Object.prototype.hasOwnProperty.call(save.solved, 'leaf')) {
+    if (!Object.prototype.hasOwnProperty.call(save.solved, 'leaf-connected')) save.solved['leaf-connected'] = save.solved.leaf;
+    delete save.solved.leaf;
+  }
+  delete save.boards.leaf;
+  if (save.at === 'leaf') save.at = 'leaf-connected';
+  function persist() {
+    try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* storage blocked: play on */ }
+  }
+
+  /* ---------- puzzles ---------- */
+  const RAMP = LEVELS.map((L, index) => {
+    const { w, h, sol } = E.fromArt(L.art);
+    const { rows, cols } = E.cluesOf(sol, w, h);
+    return { id: L.id, name: L.name, index, w, h, sol, rows, cols };
+  });
+  function newSeed() { return 1 + Math.floor(Math.random() * 99999); }
+  function endless(size, seed) {
+    for (let s = seed, tries = 0; tries < 20; s++, tries++) {
+      const g = E.generate(s, size, size);
+      if (g) return { id: 'endless', name: 'No. ' + s, endless: true, size, seed: s, w: size, h: size, sol: g.sol, rows: g.rows, cols: g.cols };
+    }
+    return null;
+  }
+
+  /* ---------- state + elements ---------- */
+  const S = {
+    puz: null, cells: null, undo: [], solved: false, solvedAt: 0,
+    time: 0, focus: 0, mark: save.mark, drag: null, pending: null,
+    kbd: false, geo: null, lastTo: null,
+  };
+  const board = $('#board'), grid = $('#grid'), bandR = $('.band-r'), bandC = $('.band-c');
+  const cursor = $('.cursor'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
+  const lvlBtn = $('#lvl-btn'), lvlText = $('#lvl-text'), clock = $('#clock'), live = $('#live');
+  const undoBtn = $('#undo-btn'), clearBtn = $('#clear-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
+  const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
+  const settings = $('#settings'), settingsBtn = $('#settings-btn');
+  const resetConfirm = $('#reset-confirm');
+  const dialogs = [help, levels, settings, resetConfirm];
+  const modalOpen = () => dialogs.some((dlg) => dlg.open);
+  let cellEls = [], rowHeads = [], colHeads = [];
+
+  function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
+  let liveTimer = 0;
+  function announce(text) {
+    clearTimeout(liveTimer);
+    live.textContent = '';
+    liveTimer = setTimeout(() => { live.textContent = text; }, 40);
+  }
+  function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
+  function label(p) { return p.endless ? 'Endless ' + p.size + ' by ' + p.size : 'Level ' + (p.index + 1); }
+
+  /* ---------- open a puzzle ---------- */
+  /* First visit, level 1, nothing touched: after a few quiet seconds one square
+   * shows a faint fill growing and fading, which is what a tap does. No words;
+   * it goes at the first move. */
+  let nudgeTimer = 0;
+  function clearNudge() {
+    clearTimeout(nudgeTimer);
+    nudgeTimer = 0;
+    const n = grid.querySelector('.cell.nudge');
+    if (n) n.classList.remove('nudge');
+  }
+  function scheduleNudge() {
+    clearNudge();
+    const fresh = () => S.puz && S.puz.id === RAMP[0].id && !S.solved && !S.cells.some((v) => v) && !Object.keys(save.solved).length;
+    if (!fresh()) return;
+    nudgeTimer = setTimeout(() => { if (fresh() && !modalOpen() && cellEls[0]) cellEls[0].classList.add('nudge'); }, 3000);
+  }
+
+  function open(puz) {
+    if (!puz) return;
+    stopClock();
+    S.puz = puz;
+    S.undo = [];
+    S.solved = false;
+    S.drag = null;
+    if (S.pending) { clearTimeout(S.pending.timer); S.pending = null; }
+    S.lastTo = null;
+    const n = puz.w * puz.h;
+    S.cells = new Int8Array(n);
+    S.time = 0;
+    const saved = puz.endless
+      ? (save.endless && save.endless.size === puz.size && save.endless.seed === puz.seed ? save.endless : null)
+      : save.boards[puz.id];
+    if (saved && typeof saved.c === 'string' && saved.c.length === n) {
+      for (let i = 0; i < n; i++) { const v = saved.c.charCodeAt(i) - 48; S.cells[i] = v === 1 || v === 2 ? v : 0; }
+      S.time = Math.max(0, saved.t | 0);
+    }
+    if (puz.endless) {
+      save.quickSize = puz.size;
+      save.at = 'endless';
+      save.endless = { size: puz.size, seed: puz.seed, c: saved ? saved.c : '', t: S.time };
+    } else save.at = puz.id;
+    persist();
+    renderQuickChoices();
+
+    // If focus was on the old board or its Next button, keep it on the board.
+    const refocus = caption.contains(document.activeElement) || grid.contains(document.activeElement);
+    // Drop the solved state without animating the new board in from the old offset.
+    board.classList.add('instant');
+    board.classList.remove('solved');
+    caption.classList.remove('show');
+    caption.hidden = true;
+    build();
+    layout();
+    renderAll();
+    hud();
+    setUrl();
+    void board.offsetWidth;
+    board.classList.remove('instant');
+    if (refocus) setFocus(0, true);
+    if (isSolved()) finish(true);
+    else scheduleNudge();
+  }
+
+  function build() {
+    const { w, h, rows, cols } = S.puz;
+    grid.textContent = '';
+    cellEls = new Array(w * h);
+    rowHeads = [];
+    colHeads = [];
+    grid.setAttribute('aria-label', label(S.puz) + ', ' + w + ' by ' + h + ' squares');
+    grid.setAttribute('aria-rowcount', String(h + 1));
+    grid.setAttribute('aria-colcount', String(w + 1));
+    const head = el('div', 'gr');
+    head.setAttribute('role', 'row');
+    const corner = el('div', 'corner');
+    corner.setAttribute('role', 'columnheader');
+    corner.innerHTML = '<span class="sr-only">Row clues</span>';
+    head.append(corner);
+    cols.forEach((clue) => { const d = clueEl('cc', clue); d.setAttribute('role', 'columnheader'); colHeads.push(d); head.append(d); });
+    grid.append(head);
+    const guides = w > 5 || h > 5;
+    for (let r = 0; r < h; r++) {
+      const gr = el('div', 'gr');
+      gr.setAttribute('role', 'row');
+      const rh = clueEl('rc', rows[r]);
+      rh.setAttribute('role', 'rowheader');
+      rowHeads.push(rh);
+      gr.append(rh);
+      for (let c = 0; c < w; c++) {
+        const i = r * w + c;
+        const d = el('div', 'cell');
+        d.setAttribute('role', 'gridcell');
+        d.tabIndex = -1;
+        if (r === 0) d.classList.add('t');
+        if (c === 0) d.classList.add('l');
+        if (c === w - 1) d.classList.add('rt');
+        if (r === h - 1) d.classList.add('bt');
+        if (guides && c < w - 1 && (c + 1) % 5 === 0) d.classList.add('gx');
+        if (guides && r < h - 1 && (r + 1) % 5 === 0) d.classList.add('gy');
+        cellEls[i] = d;
+        gr.append(d);
+      }
+      grid.append(gr);
+    }
+    S.focus = 0;
+    cellEls[0].tabIndex = 0;
+  }
+  function clueEl(kind, clue) {
+    const d = el('div', 'clue ' + kind);
+    (clue.length ? clue : [0]).forEach((n) => { const s = el('span'); s.textContent = String(n); d.append(s); });
+    return d;
+  }
+
+  /* ---------- layout: the largest cell that fits between the readout and the icons ---------- */
+  function fontFor(cell) { return Math.max(10, Math.min(15, Math.round(cell * 0.42))) * save.zoom / 100; }
+  function layout() {
+    if (!S.puz) return;
+    const { w, h, rows, cols } = S.puz;
+    // clientWidth/Height, not innerWidth: on phones innerWidth reports the
+    // overflowed width while a new board is still at its default size.
+    const vw = document.documentElement.clientWidth, vh = document.documentElement.clientHeight;
+    const narrow = vw < 560;
+    const top = narrow ? 52 : 60, bottom = narrow ? 66 : 74, gut = 16;
+    const W = vw - 2 * gut, H = vh - top - bottom;
+    const rowsN = rows.map((cl) => (cl.length ? cl : [0]));
+    const colMax = Math.max(...cols.map((cl) => Math.max(1, cl.length)));
+    let g = null;
+    for (let s = 72; s >= 8; s--) {
+      const f = fontFor(s);
+      const cw = Math.ceil(Math.max(...rowsN.map((cl) => cl.reduce((a, n) => a + String(n).length * 0.62 * f, 0) + (cl.length - 1) * 0.5 * f)) + 0.85 * f);
+      const ch = Math.ceil(colMax * 1.18 * f + 0.55 * f);
+      g = { cell: s, f, cw, ch };
+      if (cw + w * s <= W && ch + h * s <= H) break;
+    }
+    const bw = g.cw + w * g.cell, bh = g.ch + h * g.cell;
+    g.left = Math.round((vw - bw) / 2);
+    g.top = Math.round(top + Math.max(0, (H - bh) / 2));
+    S.geo = g;
+    // Where the picture goes once solved: smaller, centered with its name
+    // under it, so it sits on the page like a print with room around it.
+    const capH = caption.hidden ? 122 * save.zoom / 100 : Math.max(122, caption.offsetHeight);
+    const k = Math.min(1, ((H - capH) * 0.72) / (h * g.cell), (W * 0.8) / (w * g.cell));
+    const pw = w * g.cell * k, ph = h * g.cell * k;
+    const tx = (vw - pw) / 2, ty = top + Math.max(0, (H - ph - capH) / 2);
+    const dx = Math.round(tx - g.left - k * g.cw), dy = Math.round(ty - g.top - k * g.ch);
+    board.style.cssText = `--cell:${g.cell}px;--f:${g.f}px;--cw:${g.cw}px;--ch:${g.ch}px;--dot:${Math.max(3, Math.round(g.cell * 0.16))}px;--solved:translate(${dx}px,${dy}px) scale(${k.toFixed(4)});left:${g.left}px;top:${g.top}px;width:${bw}px;height:${bh}px`;
+    caption.style.top = Math.round(ty + ph + 14) + 'px';
+    showBands(S.bandAt == null ? -1 : S.bandAt);
+    placeCursor();
+  }
+
+  /* ---------- rendering ---------- */
+  function renderCell(i) {
+    const v = S.cells[i], d = cellEls[i], w = S.puz.w;
+    d.classList.toggle('ink', v === INK);
+    d.classList.toggle('mark', v === MARK);
+    d.setAttribute('aria-label', 'Row ' + (Math.floor(i / w) + 1) + ', column ' + (i % w + 1) + ': ' + STATE[v]);
+  }
+  function lineOf(kind, k) {
+    const { w, h } = S.puz;
+    const out = [];
+    if (kind === 'row') for (let c = 0; c < w; c++) out.push(S.cells[k * w + c]);
+    else for (let r = 0; r < h; r++) out.push(S.cells[r * w + k]);
+    return out;
+  }
+  /* Returns true when the line matches its clue. */
+  /* A line's clue dims when its filled runs match it; before that, each number
+   * fades on its own once its run is finished and closed off (E.doneClues reads
+   * the board, never the solution). A number that just finished pops once. */
+  function lineStatus(kind, k, animate) {
+    const clue = kind === 'row' ? S.puz.rows[k] : S.puz.cols[k];
+    const head = kind === 'row' ? rowHeads[k] : colHeads[k];
+    const line = lineOf(kind, k);
+    const cells = line.map((v) => (v === INK ? 1 : v === MARK ? 0 : -1));
+    const ok = E.same(E.runs(line), clue);
+    const bad = !ok && E.solveLine(cells, clue) === null;
+    const parts = clue.length ? E.doneClues(cells, clue) : [ok];
+    let count = 0;
+    Array.from(head.children).forEach((n, i) => {
+      const done = ok || parts[i];
+      if (done) count++;
+      if (animate && done && !n.classList.contains('n-done')) pop(n);
+      n.classList.toggle('n-done', done);
+    });
+    head.classList.toggle('ok', ok);
+    head.classList.toggle('bad', bad);
+    const name = (kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + ' clue ' + (clue.length ? clue.join(' ') : '0');
+    head.setAttribute('aria-label', name + (ok ? ', done' : bad ? ', cannot fit as marked' : count ? ', ' + count + ' of ' + clue.length + ' numbers done' : ''));
+    return ok;
+  }
+  function pop(n) {
+    n.classList.remove('pop');
+    void n.offsetWidth;
+    n.classList.add('pop');
+    n.addEventListener('animationend', () => n.classList.remove('pop'), { once: true });
+  }
+  function renderAll() {
+    for (let i = 0; i < S.cells.length; i++) renderCell(i);
+    for (let r = 0; r < S.puz.h; r++) lineStatus('row', r);
+    for (let c = 0; c < S.puz.w; c++) lineStatus('col', c);
+    hud();
+  }
+  /* Re-check the rows and columns that touch these cells; returns the
+   * names of lines that just became done (for the screen-reader note). */
+  function updateLines(idx) {
+    const w = S.puz.w;
+    const rs = new Set(), cs = new Set();
+    idx.forEach((i) => { rs.add(Math.floor(i / w)); cs.add(i % w); });
+    const done = [];
+    rs.forEach((r) => { const was = rowHeads[r].classList.contains('ok'); if (lineStatus('row', r, true) && !was) done.push('row ' + (r + 1)); });
+    cs.forEach((c) => { const was = colHeads[c].classList.contains('ok'); if (lineStatus('col', c, true) && !was) done.push('column ' + (c + 1)); });
+    return done;
+  }
+  function isSolved() {
+    for (let r = 0; r < S.puz.h; r++) if (!E.same(E.runs(lineOf('row', r)), S.puz.rows[r])) return false;
+    for (let c = 0; c < S.puz.w; c++) if (!E.same(E.runs(lineOf('col', c)), S.puz.cols[c])) return false;
+    return true;
+  }
+  function hud() {
+    const p = S.puz;
+    lvlText.textContent = p.endless ? '∞ ' + p.size : String(p.index + 1);
+    lvlBtn.setAttribute('aria-label', (p.endless ? 'Endless, ' + p.size + ' by ' + p.size : 'Level ' + (p.index + 1) + ' of ' + RAMP.length) + '. Choose a level');
+    clock.textContent = fmt(S.time);
+    undoBtn.setAttribute('aria-disabled', S.undo.length && !S.solved ? 'false' : 'true');
+    modeBtn.setAttribute('aria-pressed', S.mark ? 'true' : 'false');
+    modeBtn.querySelector('.m-fill').style.display = S.mark ? 'none' : '';
+    modeBtn.querySelector('.m-dot').style.display = S.mark ? '' : 'none';
+  }
+
+  /* ---------- clock ---------- */
+  let tick = null;
+  function startClock() {
+    clearNudge();
+    if (tick || S.solved) return;
+    tick = setInterval(() => {
+      if (document.hidden) return;
+      S.time++;
+      clock.textContent = fmt(S.time);
+      if (S.time % 10 === 0) storeBoard();
+    }, 1000);
+  }
+  function stopClock() { clearInterval(tick); tick = null; }
+
+  function storeBoard() {
+    if (!S.puz || S.solved) return;
+    const c = Array.from(S.cells).join('');
+    const blank = !S.cells.some((v) => v);
+    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c: blank ? '' : c, t: S.time };
+    else if (blank && !S.time) delete save.boards[S.puz.id];
+    else save.boards[S.puz.id] = { c, t: S.time };
+    persist();
+  }
+
+  /* ---------- moves ---------- */
+  /* Two plain toggles, no cycling: a tap fills or clears; a hold or right-click marks or clears.
+   * Mark mode swaps them. Filling a marked square (or marking a filled one) replaces it. */
+  const toggleInk = (v) => (v === INK ? BLANK : INK);
+  const toggleMark = (v) => (v === MARK ? BLANK : MARK);
+  function tapOf(v) { return S.mark ? toggleMark(v) : toggleInk(v); }
+  function altOf(v) { return S.mark ? toggleInk(v) : toggleMark(v); }
+
+  function pushUndo(snap) {
+    S.undo.push(snap);
+    if (S.undo.length > 400) S.undo.shift();
+  }
+  function afterChange(idx, speak) {
+    const done = updateLines(idx);
+    storeBoard();
+    hud();
+    if (isSolved()) { finish(false); return; }
+    if (speak) announce(speak + (done.length ? '. ' + done.join(' and ') + ' done' : ''));
+  }
+
+  /* A single keyboard move. */
+  function act(i, to) {
+    if (S.solved || S.cells[i] === to) return;
+    pushUndo(Int8Array.from(S.cells));
+    S.cells[i] = to;
+    S.lastTo = to;
+    startClock();
+    renderCell(i);
+    afterChange([i], to === BLANK ? 'cleared' : STATE[to]);
+  }
+
+  /* Pointer gestures: the first square sets the change (from -> to) and a
+   * drag applies it to the rectangle between that square and the pointer
+   * (a line when it stays in one row or column), to squares in the same
+   * state, rubber-banding as the pointer moves back. */
+  function begin(i, kind, pid) {
+    const from = S.cells[i];
+    const to = kind === 'alt' ? altOf(from) : tapOf(from);
+    S.drag = { id: pid, start: i, from, to, snap: Int8Array.from(S.cells), painted: [] };
+    startClock();
+    paintTo(i);
+  }
+  function paintTo(j) {
+    const d = S.drag;
+    if (!d || j < 0) return;
+    const w = S.puz.w;
+    const r0 = Math.floor(d.start / w), c0 = d.start % w;
+    const r1 = Math.floor(j / w), c1 = j % w;
+    const span = [];
+    for (let r = Math.min(r0, r1); r <= Math.max(r0, r1); r++)
+      for (let c = Math.min(c0, c1); c <= Math.max(c0, c1); c++) span.push(r * w + c);
+    const tip = j;
+    const want = new Set(span.filter((k) => d.snap[k] === d.from));
+    const touched = [];
+    d.painted.forEach((k) => { if (!want.has(k)) { S.cells[k] = d.snap[k]; touched.push(k); } });
+    want.forEach((k) => { if (S.cells[k] !== d.to) { S.cells[k] = d.to; touched.push(k); } });
+    d.painted = [...want];
+    touched.forEach(renderCell);
+    if (touched.length) updateLines(touched);
+    setFocus(tip, false);
+  }
+  function endGesture() {
+    const d = S.drag;
+    S.drag = null;
+    if (!d || !d.painted.length) return;
+    pushUndo(d.snap);
+    afterChange(d.painted, null);
+  }
+
+  function undo() {
+    if (S.solved) return;
+    const snap = S.undo.pop();
+    if (!snap) { announce('Nothing to undo'); return; }
+    const diff = [];
+    for (let i = 0; i < snap.length; i++) if (S.cells[i] !== snap[i]) diff.push(i);
+    S.cells = snap;
+    diff.forEach(renderCell);
+    updateLines(diff);
+    storeBoard();
+    hud();
+    announce('Undone');
+  }
+  function startOver() {
+    if (S.solved) { open(S.puz); announce(label(S.puz) + ' again'); return; }
+    if (!S.cells.some((v) => v)) { announce('The board is already blank'); return; }
+    pushUndo(Int8Array.from(S.cells));
+    const diff = [];
+    S.cells.forEach((v, i) => { if (v) diff.push(i); });
+    S.cells.fill(0);
+    diff.forEach(renderCell);
+    updateLines(diff);
+    storeBoard();
+    hud();
+    announce('Board cleared. Undo brings it back.');
+  }
+
+  /* ---------- solved ---------- */
+  function finish(quiet) {
+    S.solved = true;
+    S.solvedAt = performance.now();
+    stopClock();
+    const p = S.puz;
+    if (p.endless) {
+      save.endless = { size: p.size, seed: newSeed(), c: '', t: 0 };
+    } else {
+      const best = save.solved[p.id];
+      save.solved[p.id] = typeof best === 'number' && best > 0 && best < S.time ? best : S.time;
+      delete save.boards[p.id];
+      const nx = RAMP[p.index + 1];
+      save.at = nx ? nx.id : p.id;
+    }
+    persist();
+    showBands(-1);
+    placeCursor();
+    board.classList.add('solved');
+    capName.textContent = p.name;
+    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : p.index + 1 < RAMP.length ? 'Next level' : 'Choose what to play next');
+    caption.hidden = false;
+    layout();
+    requestAnimationFrame(() => requestAnimationFrame(() => caption.classList.add('show')));
+    hud();
+    if (!quiet) announce('Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
+    // Keyboard players land on Next; pointer players just tap anywhere.
+    if (S.kbd) nextBtn.focus({ preventScroll: true });
+  }
+  function next() {
+    const p = S.puz;
+    if (p.endless) open(endless(p.size, save.endless ? save.endless.seed : newSeed()));
+    else if (p.index + 1 < RAMP.length) open(RAMP[p.index + 1]);
+    else { openLevels(true); return; }
+    announce(label(S.puz) + ', ' + S.puz.w + ' by ' + S.puz.h);
+  }
+
+  /* ---------- focus, bands, cursor ---------- */
+  function setFocus(i, move) {
+    if (!cellEls[i]) return;
+    if (cellEls[S.focus]) cellEls[S.focus].tabIndex = -1;
+    S.focus = i;
+    cellEls[i].tabIndex = 0;
+    if (move) cellEls[i].focus({ preventScroll: true });
+    showBands(i);
+    placeCursor();
+  }
+  function showBands(i) {
+    S.bandAt = i;
+    if (i < 0 || S.solved || !S.geo) { bandR.style.opacity = '0'; bandC.style.opacity = '0'; return; }
+    const g = S.geo, { w, h } = S.puz;
+    const r = Math.floor(i / w), c = i % w;
+    bandR.style.cssText = `opacity:1;left:0;top:${g.ch + r * g.cell}px;width:${g.cw + w * g.cell}px;height:${g.cell}px`;
+    bandC.style.cssText = `opacity:1;top:0;left:${g.cw + c * g.cell}px;width:${g.cell}px;height:${g.ch + h * g.cell}px`;
+  }
+  function placeCursor() {
+    const on = S.kbd && !S.solved && S.geo && grid.contains(document.activeElement);
+    cursor.classList.toggle('on', !!on);
+    if (!on) return;
+    const g = S.geo, w = S.puz.w;
+    cursor.style.left = g.cw + (S.focus % w) * g.cell + 'px';
+    cursor.style.top = g.ch + Math.floor(S.focus / w) * g.cell + 'px';
+  }
+
+  /* ---------- pointer input ---------- */
+  function cellAt(x, y, clamp) {
+    const b = board.getBoundingClientRect(), g = S.geo, { w, h } = S.puz;
+    let c = Math.floor((x - b.left - g.cw) / g.cell), r = Math.floor((y - b.top - g.ch) / g.cell);
+    if (clamp) { c = Math.max(0, Math.min(w - 1, c)); r = Math.max(0, Math.min(h - 1, r)); }
+    else if (c < 0 || r < 0 || c >= w || r >= h) return -1;
+    return r * w + c;
+  }
+  board.addEventListener('pointerdown', (e) => {
+    if (S.solved || !S.geo) return;
+    if (e.button !== 0 && e.button !== 2) return;
+    const i = cellAt(e.clientX, e.clientY);
+    if (i < 0) return;
+    e.preventDefault();
+    S.kbd = false;
+    try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
+    setFocus(i, false);
+    if (e.pointerType === 'touch') {
+      const p = { i, id: e.pointerId, timer: 0 };
+      p.timer = setTimeout(() => {
+        if (S.pending !== p) return;
+        S.pending = null;
+        begin(p.i, 'alt', p.id);
+        try { navigator.vibrate && navigator.vibrate(12); } catch (_) { /* no haptics */ }
+      }, HOLD_MS);
+      S.pending = p;
+    } else begin(i, e.button === 2 ? 'alt' : 'tap', e.pointerId);
+  });
+  board.addEventListener('pointermove', (e) => {
+    if (S.solved || !S.geo) return;
+    if (S.pending && e.pointerId === S.pending.id) {
+      const j = cellAt(e.clientX, e.clientY, true);
+      if (j !== S.pending.i) {
+        const p = S.pending;
+        clearTimeout(p.timer);
+        S.pending = null;
+        begin(p.i, 'tap', p.id);
+        paintTo(j);
+      }
+      return;
+    }
+    if (S.drag && e.pointerId === S.drag.id) { paintTo(cellAt(e.clientX, e.clientY, true)); return; }
+    if (e.pointerType === 'mouse') { const i = cellAt(e.clientX, e.clientY); showBands(i); }
+  });
+  function pointerEnd(e) {
+    if (S.pending && e.pointerId === S.pending.id) {
+      const p = S.pending;
+      clearTimeout(p.timer);
+      S.pending = null;
+      if (e.type === 'pointerup') { begin(p.i, 'tap', p.id); endGesture(); }
+      return;
+    }
+    if (S.drag && e.pointerId === S.drag.id) endGesture();
+  }
+  board.addEventListener('pointerup', pointerEnd);
+  board.addEventListener('pointercancel', pointerEnd);
+  board.addEventListener('lostpointercapture', pointerEnd);
+  board.addEventListener('pointerleave', (e) => {
+    if (e.pointerType === 'mouse' && !S.drag) showBands(grid.contains(document.activeElement) ? S.focus : -1);
+  });
+  board.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  /* Any pointer press ends keyboard mode (hides the keyboard cursor). */
+  document.addEventListener('pointerdown', () => { if (S.kbd) { S.kbd = false; placeCursor(); } }, true);
+
+  // Background holds never enter the board gesture path. A second pointer,
+  // movement, cancellation, or loss of the window cancels the pending hold.
+  let backgroundHold = null, heldBackground = null;
+  const emptyBackground = target => !target.closest('.cell, .clue, button, a, .hud, .caption, dialog');
+  function cancelBackground() {
+    if (backgroundHold) clearTimeout(backgroundHold.timer);
+    backgroundHold = null;
+  }
+  document.addEventListener('pointerdown', e => {
+    cancelBackground();
+    heldBackground = null;
+    if (!e.isPrimary || e.button !== 0 || modalOpen() || !emptyBackground(e.target) || S.drag || S.pending) return;
+    const hold = { id: e.pointerId, x: e.clientX, y: e.clientY, opener: document.activeElement };
+    hold.timer = setTimeout(() => {
+      backgroundHold = null;
+      heldBackground = hold;
+      openSettings(hold.opener instanceof HTMLElement && hold.opener !== document.body ? hold.opener : settingsBtn);
+    }, 500);
+    backgroundHold = hold;
+  });
+  document.addEventListener('pointermove', e => {
+    if (backgroundHold && e.pointerId === backgroundHold.id && Math.hypot(e.clientX - backgroundHold.x, e.clientY - backgroundHold.y) >= 10) cancelBackground();
+  });
+  ['pointerup', 'pointercancel'].forEach(type => document.addEventListener(type, cancelBackground));
+  window.addEventListener('blur', cancelBackground);
+  document.addEventListener('contextmenu', e => {
+    if (heldBackground && Math.hypot(e.clientX - heldBackground.x, e.clientY - heldBackground.y) < 10) e.preventDefault();
+  });
+  document.addEventListener('click', e => {
+    if (heldBackground) { heldBackground = null; e.preventDefault(); e.stopImmediatePropagation(); return; }
+    // Wait for release so a solved-screen background hold can open Settings.
+    if (!S.solved || modalOpen() || e.target.closest('button, dialog') || performance.now() - S.solvedAt < 450) return;
+    next();
+  }, true);
+
+  /* ---------- keyboard ---------- */
+  grid.addEventListener('focusin', () => { showBands(S.focus); placeCursor(); });
+  grid.addEventListener('focusout', () => {
+    setTimeout(() => { if (!grid.contains(document.activeElement)) { placeCursor(); showBands(-1); } }, 0);
+  });
+  grid.addEventListener('keydown', (e) => {
+    if (S.solved) return;
+    const { w, h } = S.puz;
+    const i = S.focus;
+    let r = Math.floor(i / w), c = i % w, moved = false, handled = true;
+    switch (e.key) {
+      case 'ArrowUp': r = Math.max(0, r - 1); moved = true; break;
+      case 'ArrowDown': r = Math.min(h - 1, r + 1); moved = true; break;
+      case 'ArrowLeft': c = Math.max(0, c - 1); moved = true; break;
+      case 'ArrowRight': c = Math.min(w - 1, c + 1); moved = true; break;
+      case 'Home': c = 0; if (e.ctrlKey) r = 0; moved = true; break;
+      case 'End': c = w - 1; if (e.ctrlKey) r = h - 1; moved = true; break;
+      case ' ': case 'Enter': act(i, S.cells[i] === INK ? BLANK : INK); break;
+      case 'x': case 'X': act(i, S.cells[i] === MARK ? BLANK : MARK); break;
+      case 'Delete': case 'Backspace': act(i, BLANK); break;
+      default: handled = false;
+    }
+    if (handled) { e.preventDefault(); e.stopPropagation(); S.kbd = true; }
+    if (moved) {
+      const j = r * w + c;
+      setFocus(j, true);
+      if (e.shiftKey && S.lastTo !== null && j !== i) act(j, S.lastTo);
+    }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (modalOpen()) return;
+    const k = e.key;
+    if (k === 'Tab') { S.kbd = true; setTimeout(placeCursor, 0); return; }
+    if ((k === 'z' || k === 'Z') && !e.altKey) { e.preventDefault(); undo(); return; }
+    if (k === '?') { e.preventDefault(); openHelp(); return; }
+    if (S.solved && (k === 'Enter' || k === ' ') && !(e.target instanceof HTMLButtonElement)) { e.preventDefault(); next(); return; }
+    if (!S.solved && k.startsWith('Arrow') && !grid.contains(e.target) && !(e.target instanceof HTMLButtonElement)) {
+      e.preventDefault();
+      S.kbd = true;
+      setFocus(S.focus, true);
+    }
+  });
+
+  /* ---------- buttons ---------- */
+  undoBtn.addEventListener('click', undo);
+  clearBtn.addEventListener('click', startOver);
+  modeBtn.addEventListener('click', () => {
+    S.mark = !S.mark;
+    save.mark = S.mark;
+    persist();
+    hud();
+    announce(S.mark ? 'Mark mode on: a tap marks a square empty' : 'Mark mode off: a tap fills');
+  });
+  nextBtn.addEventListener('click', next);
+  helpBtn.addEventListener('click', openHelp);
+  lvlBtn.addEventListener('click', () => openLevels(false));
+
+  // Help rows stay independent of the puzzle and remain editable after solving.
+  const lessons = [
+    { answer: '11111', why: '5 means one run of five filled squares.' },
+    { answer: '11101', why: 'Three, a gap, one: the only way it fits.' },
+    { answer: '01110', why: 'The middle three are filled wherever the 4 starts.' },
+  ];
+  help.querySelectorAll('.eg li').forEach((row, index) => {
+    const { answer, why } = lessons[index];
+    const cells = [...row.querySelectorAll('.cell')];
+    const note = row.querySelector('.eg-note');
+    function check() {
+      const correct = cells.map(cell => cell.getAttribute('aria-pressed') === 'true' ? '1' : '0').join('') === answer;
+      row.classList.toggle('complete', correct);
+      const text = correct ? why : '';
+      if (note.textContent !== text) note.textContent = text;
+    }
+    function fill(cell, pressed) {
+      cell.setAttribute('aria-pressed', String(pressed));
+      cell.classList.toggle('ink', pressed);
+    }
+    cells.forEach(cell => cell.addEventListener('click', () => {
+      fill(cell, cell.getAttribute('aria-pressed') !== 'true');
+      check();
+    }));
+    row.querySelector('.eg-show').addEventListener('click', () => {
+      cells.forEach((cell, i) => fill(cell, answer[i] === '1'));
+      check();
+    });
+  });
+
+  /* ---------- sheets ---------- */
+  function showSheet(dlg, opener) {
+    if (dlg.open) return;
+    dlg.showModal();
+    dlg.scrollTop = 0;
+    dlg.addEventListener('close', () => { if (opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true }); }, { once: true });
+  }
+  function openHelp() { showSheet(help, helpBtn); }
+  function openSettings(opener = settingsBtn) {
+    showSheet(settings, opener);
+    $('#settings-sizes button[aria-pressed="true"]').focus({ preventScroll: true });
+  }
+  settingsBtn.addEventListener('click', () => openSettings());
+  help.addEventListener('close', () => {
+    if (!save.seen) { save.seen = true; persist(); }
+  });
+  dialogs.forEach((dlg) => {
+    dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
+    dlg.addEventListener('keydown', (e) => {
+      if (e.key !== 'Tab') return;
+      const controls = [...dlg.querySelectorAll('button, a[href], summary')];
+      const first = controls[0], last = controls[controls.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    });
+  });
+
+  $('#reset-level').addEventListener('click', () => { startOver(); settings.close(); });
+  $('#reset-all').addEventListener('click', () => showSheet(resetConfirm, $('#reset-all')));
+  $('#confirm-reset').addEventListener('click', () => {
+    save.solved = {}; save.boards = {}; save.endless = null; save.at = null;
+    persist();
+    resetConfirm.close();
+    settings.close();
+    open(RAMP[0]);
+    announce('All progress erased. Level 1.');
+  });
+
+  function appearance() {
+    if (save.theme === 'system') delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = save.theme;
+    document.documentElement.style.setProperty('--zoom', save.zoom / 100);
+    const nextTheme = { system: 'light', light: 'dark', dark: 'system' }[save.theme];
+    const paths = {
+      system: '<circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16Z" fill="currentColor"/>',
+      light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+      dark: '<path d="M20 14A8.5 8.5 0 0 1 10 4a8.5 8.5 0 1 0 10 10Z"/>',
+    };
+    $('#theme-btn').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[save.theme] + '</svg>';
+    $('#theme-btn').setAttribute('aria-label', 'Theme: ' + save.theme + '. Switch to ' + nextTheme + '.');
+    $('#zoom-sizes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.textContent) === save.zoom)));
+  }
+  [100, 115, 130, 150].forEach(n => {
+    const b = el('button', 'size-choice');
+    b.type = 'button'; b.textContent = String(n);
+    b.setAttribute('aria-label', n + ' percent');
+    b.addEventListener('click', () => { save.zoom = n; appearance(); persist(); layout(); });
+    $('#zoom-sizes').append(b);
+  });
+  $('#theme-btn').addEventListener('click', () => {
+    save.theme = { system: 'light', light: 'dark', dark: 'system' }[save.theme];
+    appearance(); persist();
+  });
+  appearance();
+
+  function renderQuickChoices() {
+    [sizesEl, $('#settings-sizes'), $('#solved-sizes')].forEach((row) => {
+      row.replaceChildren();
+      SIZES.forEach((n) => {
+        const b = el('button', 'size-choice');
+        b.type = 'button';
+        b.textContent = String(n);
+        b.setAttribute('aria-label', 'Quick play, ' + n + ' by ' + n);
+        b.setAttribute('aria-pressed', String(save.quickSize === n));
+        b.addEventListener('click', () => {
+          const p = endless(n, newSeed());
+          if (!p) { announce('Could not make a board. Please try again.'); return; }
+          storeBoard();
+          // Even a repeated seed starts with a blank board.
+          save.endless = null;
+          const dlg = row.closest('dialog');
+          if (dlg) dlg.close();
+          open(p);
+          if (!dlg) setFocus(0, true);
+          announce('Quick play, ' + n + ' by ' + n);
+        });
+        row.append(b);
+      });
+    });
+  }
+  function openLevels(atEnd) {
+    lvGrid.textContent = '';
+    let solved = 0;
+    RAMP.forEach((p, i) => {
+      const li = el('li');
+      const b = el('button', 'lv');
+      b.type = 'button';
+      const done = typeof save.solved[p.id] === 'number';
+      b.textContent = String(i + 1);
+      if (done) { solved++; b.classList.add('done'); }
+      b.setAttribute('aria-label', 'Level ' + (i + 1) + ', ' + (done ? p.name + ', solved' : p.w + ' by ' + p.h));
+      if (!S.puz.endless && S.puz.index === i) { b.setAttribute('aria-current', 'true'); }
+      b.addEventListener('click', () => { levels.close(); open(p); setFocus(0, true); announce(label(p) + ', ' + p.w + ' by ' + p.h); });
+      li.append(b);
+      lvGrid.append(li);
+    });
+    lvMeta.textContent = solved + ' of ' + RAMP.length + ' solved';
+    showSheet(levels, atEnd ? nextBtn : lvlBtn);
+    sizesEl.querySelector('[aria-pressed="true"]').focus({ preventScroll: true });
+
+  }
+
+  /* ---------- URL ---------- */
+  function setUrl() {
+    const p = S.puz;
+    const q = p.endless ? '?endless=' + p.size + '&seed=' + p.seed : '?level=' + (p.index + 1);
+    try { history.replaceState(null, '', location.pathname + q); } catch (_) { /* file:// or sandbox */ }
+  }
+  function initial() {
+    const q = new URLSearchParams(location.search);
+    if (q.has('endless')) {
+      const want = parseInt(q.get('endless'), 10);
+      const size = SIZES.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a), 10);
+      let seed = parseInt(q.get('seed'), 10);
+      if (!(seed > 0)) seed = save.endless && save.endless.size === size ? save.endless.seed : newSeed();
+      const p = endless(size, seed);
+      if (p) return p;
+    }
+    if (q.has('level')) {
+      const n = parseInt(q.get('level'), 10);
+      if (n >= 1 && n <= RAMP.length) return RAMP[n - 1];
+    }
+    if (save.at === 'endless' && save.endless && SIZES.includes(save.endless.size) && save.endless.seed > 0) {
+      const p = endless(save.endless.size, save.endless.seed);
+      if (p) return p;
+    }
+    return RAMP.find((p) => p.id === save.at) || RAMP[0];
+  }
+
+  /* ---------- go ---------- */
+  let rz = 0;
+  window.addEventListener('resize', () => { cancelAnimationFrame(rz); rz = requestAnimationFrame(layout); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) storeBoard(); });
+  window.addEventListener('pagehide', storeBoard);
+
+  open(initial());
+  // How to play opens only from the ? button or the ? key, never on load (Luke, 2026-10-04).
+  window.__notan = { S, RAMP, open, next, endless, isSolved };
+})();
