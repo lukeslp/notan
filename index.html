@@ -91,40 +91,30 @@ try {
     <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
     <h2 id="help-title">How to play</h2>
     <form method="dialog" class="primary-action"><button class="text-action" id="help-go" autofocus>Play</button></form>
-    <p>Fill squares so every row and column matches its numbers. Finish to reveal a picture.</p>
+    <p>Fill squares so every row and column matches its numbers. Each number is a run of filled squares, in order, with at least one empty square between runs. Finish and a picture appears.</p>
     <ul class="eg">
-      <li role="group" aria-label="Clue 5" aria-describedby="eg-task-0">
-        <p class="eg-task" id="eg-task-0">Each number is a run of filled squares. Fill the run of 5.</p>
-        <div class="eg-row"><span class="eg-clue" aria-hidden="true">5</span><div class="eg-cells"><button type="button" class="cell t bt l" aria-label="Square 1" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 2" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 3" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 4" aria-pressed="false"></button><button type="button" class="cell t bt rt" aria-label="Square 5" aria-pressed="false"></button></div></div>
-        <button type="button" class="eg-show">Show me<span class="sr-only">: clue 5</span></button>
-        <p class="eg-note" role="status" aria-live="polite" aria-atomic="true"></p>
+      <li>
+        <span class="eg-row" aria-hidden="true"><span class="eg-clue">3 1</span><span class="eg-cells"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i></span></span>
+        <span class="eg-note">3 1 in five squares fits one way: three, a gap, one.</span>
       </li>
-      <li role="group" aria-label="Clue 3 1" aria-describedby="eg-task-1">
-        <p class="eg-task" id="eg-task-1">Two numbers are two runs, in order, with at least one empty square between them.</p>
-        <div class="eg-row"><span class="eg-clue" aria-hidden="true">3 1</span><div class="eg-cells"><button type="button" class="cell t bt l" aria-label="Square 1" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 2" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 3" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 4" aria-pressed="false"></button><button type="button" class="cell t bt rt" aria-label="Square 5" aria-pressed="false"></button></div></div>
-        <button type="button" class="eg-show">Show me<span class="sr-only">: clue 3 1</span></button>
-        <p class="eg-note" role="status" aria-live="polite" aria-atomic="true"></p>
+      <li>
+        <span class="eg-row" aria-hidden="true"><span class="eg-clue">4</span><span class="eg-cells"><i class="q"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="q"></i></span></span>
+        <span class="eg-note">4 in five starts at either end, so the middle three are filled either way.</span>
       </li>
-      <li role="group" aria-label="Clue 4" aria-describedby="eg-task-2">
-        <p class="eg-task" id="eg-task-2">The 4 could start at either end. Fill only the squares it covers either way.</p>
-        <div class="eg-row"><span class="eg-clue" aria-hidden="true">4</span><div class="eg-cells"><button type="button" class="cell t bt l" aria-label="Square 1" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 2" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 3" aria-pressed="false"></button><button type="button" class="cell t bt" aria-label="Square 4" aria-pressed="false"></button><button type="button" class="cell t bt rt" aria-label="Square 5" aria-pressed="false"></button></div></div>
-        <button type="button" class="eg-show">Show me<span class="sr-only">: clue 4</span></button>
-        <p class="eg-note" role="status" aria-live="polite" aria-atomic="true"></p>
+      <li>
+        <span class="eg-row" aria-hidden="true"><span class="eg-clue">3</span><span class="eg-cells"><i class="q"></i><i class="q"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span>
+        <span class="eg-note">Hold a square (or right-click it) to mark it empty with a dot, once you know it can't be filled.</span>
       </li>
     </ul>
-    <details class="controls">
-      <summary>Controls</summary>
-      <ul class="keys">
-        <li>Tap a square to fill it; tap again to clear it.</li>
-        <li>Hold or right-click to mark a square empty with a dot. Do it again to clear the dot.</li>
-        <li>Drag across to fill a line, or across and down to fill a block.</li>
-        <li><b>Arrows</b> move · <b>Space / Enter</b> fill · <b>X</b> mark · <b>Delete</b> clear · <b>Z</b> undo · <b>?</b> help. Hold <b>Shift</b> with an arrow to paint.</li>
-        <li>A number fades when its run is closed off by a dot or the edge. Only the finished picture confirms the solution.</li>
-        <li>Bottom left: undo, start over, mark mode (taps mark instead of fill). Tap the level number to pick a level.</li>
-        <li>Settings, bottom right, has Quick play (a fresh board at the size you choose), Zoom, the light or dark theme, and Reset.</li>
-        <li>To open Settings from anywhere, hold the empty background.</li>
-      </ul>
-    </details>
+    <ul class="keys">
+      <li>Tap a square to fill it; tap again to clear it.</li>
+      <li>Hold or right-click to mark a square empty with a dot. Do it again to clear the dot.</li>
+      <li>A number fades once its run is finished and closed off by a dot or the edge. That's your bookkeeping, not a check: only the finished picture says you're right.</li>
+      <li>Drag to fill a line, or a block: drag across and down.</li>
+      <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
+      <li>Bottom left: undo, start over, and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
+      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. Hold the empty background to open it from anywhere.</li>
+    </ul>
     <div class="sheet-foot">
       <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
     </div>

@@ -657,36 +657,6 @@
   helpBtn.addEventListener('click', openHelp);
   lvlBtn.addEventListener('click', () => openLevels(false));
 
-  // Help rows stay independent of the puzzle and remain editable after solving.
-  const lessons = [
-    { answer: '11111', why: '5 means one run of five filled squares.' },
-    { answer: '11101', why: 'Three, a gap, one: the only way it fits.' },
-    { answer: '01110', why: 'The middle three are filled wherever the 4 starts.' },
-  ];
-  help.querySelectorAll('.eg li').forEach((row, index) => {
-    const { answer, why } = lessons[index];
-    const cells = [...row.querySelectorAll('.cell')];
-    const note = row.querySelector('.eg-note');
-    function check() {
-      const correct = cells.map(cell => cell.getAttribute('aria-pressed') === 'true' ? '1' : '0').join('') === answer;
-      row.classList.toggle('complete', correct);
-      const text = correct ? why : '';
-      if (note.textContent !== text) note.textContent = text;
-    }
-    function fill(cell, pressed) {
-      cell.setAttribute('aria-pressed', String(pressed));
-      cell.classList.toggle('ink', pressed);
-    }
-    cells.forEach(cell => cell.addEventListener('click', () => {
-      fill(cell, cell.getAttribute('aria-pressed') !== 'true');
-      check();
-    }));
-    row.querySelector('.eg-show').addEventListener('click', () => {
-      cells.forEach((cell, i) => fill(cell, answer[i] === '1'));
-      check();
-    });
-  });
-
   /* ---------- sheets ---------- */
   function showSheet(dlg, opener) {
     if (dlg.open) return;
@@ -707,7 +677,7 @@
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
     dlg.addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
-      const controls = [...dlg.querySelectorAll('button, a[href], summary')];
+      const controls = [...dlg.querySelectorAll('button, a[href]')];
       const first = controls[0], last = controls[controls.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }

@@ -376,21 +376,19 @@ dialog.sheet::backdrop { background: var(--scrim); }
 }
 .sheet-x svg { width: 20px; height: 20px; }
 
-.eg { list-style: none; margin: 0 0 8px; padding: 0; display: grid; gap: 12px; }
-.eg li { position: relative; }
-.sheet .eg-task { margin: 0 0 6px; }
+.eg { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
+.eg li { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
 .eg-row { display: flex; align-items: center; gap: 8px; }
-.eg-clue { font: 500 calc(13px * var(--zoom))/1 var(--mono); width: 2.4em; flex: none; text-align: right; }
-.eg-cells { display: flex; --cell: 40px; }
-.eg-cells .cell { appearance: none; padding: 0; border: 0; border-radius: 0; background: none; touch-action: manipulation; }
-.eg-cells .cell:focus-visible, .eg-show:focus-visible, .controls summary:focus-visible {
-  outline: 2px solid var(--ink); outline-offset: 3px; z-index: 1;
+.eg-clue { font: 500 calc(13px * var(--zoom))/1 var(--mono); min-width: 2.4em; text-align: right; }
+.eg-cells { display: flex; border: 1px solid var(--frame); }
+.eg-cells i { width: 16px; height: 16px; border-right: 1px solid var(--line); position: relative; }
+.eg-cells i:last-child { border-right: 0; }
+.eg-cells i.on { background: var(--ink); border-right-color: var(--ink); }
+.eg-cells i.q::after {
+  content: ""; position: absolute; left: 50%; top: 50%;
+  width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--mark);
 }
-.eg-show { display: block; margin-left: auto; min-height: 28px; padding: 2px 0; border: 0; background: none; color: var(--sub); font: inherit; font-size: calc(13px * var(--zoom)); cursor: pointer; }
-.sheet .eg-note { min-height: 2.8em; margin: 0; font-size: calc(13px * var(--zoom)); line-height: 1.4; color: var(--sub); }
-.eg li.complete .eg-row, .eg li.complete .eg-note { animation: eg-settle 240ms ease-out; }
-@keyframes eg-settle { from { opacity: .45; } to { opacity: 1; } }
-.controls summary { cursor: pointer; min-height: 44px; display: list-item; padding: 10px 0; }
+.eg-note { font-size: calc(13px * var(--zoom)); line-height: 1.4; color: var(--sub); }
 
 .keys { list-style: none; margin: 0 0 16px; padding: 0; font-size: calc(13px * var(--zoom)); color: var(--sub); }
 .keys li { padding: 3px 0; }

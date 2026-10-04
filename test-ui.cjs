@@ -22,7 +22,7 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch({ executablePath: process.env.CHROME || [path.join(process.env.HOME || '', '.cache/ms-playwright/chromium-1243/chrome-linux64/chrome')].find((f) => fs.existsSync(f)) });
   try {
     for (const viewport of [{ width: 390, height: 844 }, { width: 1280, height: 820 }]) for (const colorScheme of ['light', 'dark']) {
-      const context = await browser.newContext({ viewport, colorScheme, reducedMotion: 'reduce', hasTouch: true });
+      const context = await browser.newContext({ viewport, colorScheme, reducedMotion: 'reduce' });
       // Keep analytics markup intact, but don't send test traffic.
       await context.route('https://stats.dr.eamer.dev/**', route => route.fulfill({ body: '', contentType: 'text/javascript' }));
       const page = await context.newPage(), errors = [];
@@ -104,72 +104,9 @@ const server = http.createServer((req, res) => {
       await page.locator('#help-btn').click();
       assert.equal(await page.locator('#help #reset-all').count(), 0);
       assert.equal(await page.locator('#help a').textContent(), 'lukesteuber.com');
-      const examples = page.locator('#help .eg li');
-      const answers = ['11111', '11101', '01110'];
-      const explanations = [
-        '5 means one run of five filled squares.',
-        'Three, a gap, one: the only way it fits.',
-        'The middle three are filled wherever the 4 starts.',
-      ];
-      async function checkHelpFits() {
-        assert.equal(await page.locator('#help').evaluate(d => d.scrollTop), 0);
-        for (let i = 0; i < 3; i++) {
-          const bounds = await examples.nth(i).boundingBox();
-          assert(bounds.y >= 0 && bounds.y + bounds.height <= viewport.height, 'All three lessons fit without scrolling');
-        }
-      }
-      assert.equal(await page.locator('#help details').evaluate(d => d.open), false);
-      await checkHelpFits();
-      const boardBeforeLessons = await page.evaluate(() => Array.from(__notan.S.cells));
-      for (let i = 0; i < 3; i++) {
-        const example = examples.nth(i), cells = example.locator('button.cell'), note = example.locator('.eg-note');
-        assert.equal(await example.getAttribute('aria-label'), 'Clue ' + ['5', '3 1', '4'][i]);
-        assert.equal(await note.getAttribute('aria-live'), 'polite');
-        assert.equal(await cells.count(), 5);
-        // An incorrect fill stays quiet; a second tap clears it.
-        await cells.first().tap();
-        assert.equal(await note.textContent(), '');
-        await cells.first().tap();
-        assert.equal(await cells.first().getAttribute('aria-pressed'), 'false');
-        for (const input of ['tap', 'Enter', 'Space']) {
-          await cells.first().focus();
-          for (let j = 0; j < 5; j++) {
-            if (answers[i][j] === '1') {
-              if (input === 'tap') await cells.nth(j).tap();
-              else await page.keyboard.press(input);
-            }
-            if (input !== 'tap' && j < 4) await page.keyboard.press('Tab');
-          }
-          assert.equal(await note.textContent(), explanations[i]);
-          assert.equal(await example.locator('.ink').count(), answers[i].split('1').length - 1);
-          assert.equal(await example.locator('.eg-row').evaluate(e => getComputedStyle(e).animationName), 'none');
-          await checkHelpFits();
-          // Clear through the same input, including after success.
-          for (let j = 0; j < 5; j++) if (answers[i][j] === '1') {
-            if (input === 'tap') await cells.nth(j).tap();
-            else { await cells.nth(j).focus(); await page.keyboard.press(input); }
-          }
-          assert.equal(await note.textContent(), '');
-        }
-        // Show me replaces a wrong answer, including unwanted end cells.
-        await cells.first().tap();
-        await example.locator('.eg-show').focus();
-        await page.keyboard.press('Enter');
-        assert.equal(await note.textContent(), explanations[i]);
-        assert.deepEqual(await cells.evaluateAll(es => es.map(e => e.getAttribute('aria-pressed'))), [...answers[i]].map(v => String(v === '1')));
-      }
-      assert.deepEqual(await page.evaluate(() => Array.from(__notan.S.cells)), boardBeforeLessons);
-      await checkHelpFits();
       await page.screenshot({ path: `/tmp/notan-help-${viewport.width}-${colorScheme}.png` });
       await page.keyboard.press('Escape');
       assert.equal(await page.evaluate(() => document.activeElement.id), 'help-btn');
-      await page.keyboard.press('?');
-      assert.equal(await page.locator('#help').evaluate(d => d.open), true);
-      await page.locator('#help summary').focus(); await page.keyboard.press('Enter');
-      assert.equal(await page.locator('#help details').evaluate(d => d.open), true);
-      await page.keyboard.press('Enter');
-      await page.locator('#help-go').click();
-      assert.equal(await page.locator('#help').evaluate(d => d.open), false);
       await page.locator('#settings-btn').click();
       assert.equal(await page.locator('#settings').getAttribute('aria-label'), 'Settings');
       assert.equal(await page.locator('#settings h2').count(), 0);
@@ -269,7 +206,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#settings').evaluate(d => d.open), false);
       await cdp.detach();
       assert.deepEqual(errors, []);
-      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: playable help (tap, Enter, Space, Show me, phone fit), migration, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds; no console errors`);
+      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: migration, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds; no console errors`);
       await context.close();
     }
   } finally { await browser.close(); server.close(); }
