@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css?v=8af8de38">
+<link rel="stylesheet" href="./notan.css?v=bf4b9e6d">
 </head>
 <body>
 <main id="app">
@@ -59,6 +59,7 @@ try {
     <button type="button" class="ib" id="next-btn" aria-label="Next level">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </button>
+    <button type="button" class="foot-btn share-btn" id="share-btn" hidden>Share blank</button>
   </div>
 
   <div class="bar">
@@ -118,7 +119,7 @@ try {
       <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
       <li><b>L</b> locks or unlocks the focused square’s row; <b>Shift+L</b> its column.</li>
       <li>Bottom left: undo, start over, and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
-      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. Hold the empty background to open it from anywhere.</li>
+      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
     </ul>
     <div class="sheet-foot">
       <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
@@ -168,7 +169,7 @@ try {
 
 <script src="./engine.js?v=edf79bce"></script>
 <script src="./levels.js?v=0687d7bc"></script>
-<script src="./notan.js?v=a3443871"></script>
+<script src="./notan.js?v=a5a58f7a"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>
 </html>

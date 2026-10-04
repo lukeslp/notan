@@ -69,6 +69,7 @@
   const cursor = $('.cursor'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
   const lvlBtn = $('#lvl-btn'), lvlText = $('#lvl-text'), clock = $('#clock'), live = $('#live');
   const undoBtn = $('#undo-btn'), clearBtn = $('#clear-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
+  const shareBtn = $('#share-btn');
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
   const resetConfirm = $('#reset-confirm');
@@ -478,6 +479,8 @@
     placeCursor();
     board.classList.add('solved');
     capName.textContent = p.name;
+    shareBtn.hidden = !p.endless;
+    shareBtn.textContent = 'Share blank';
     nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : p.index + 1 < RAMP.length ? 'Next level' : 'Choose what to play next');
     caption.hidden = false;
     layout();
@@ -720,6 +723,26 @@
     announce(S.mark ? 'Mark mode on: a tap marks a square empty' : 'Mark mode off: a tap fills');
   });
   nextBtn.addEventListener('click', next);
+  // Share the unsolved quick-play board: same size and seed, so a friend
+  // gets the identical puzzle (every generated board has one solution).
+  shareBtn.addEventListener('click', async () => {
+    const p = S.puz;
+    if (!p.endless) return;
+    const url = 'https://dr.eamer.dev/games/notan/?endless=' + p.size + '&seed=' + p.seed;
+    const text = 'A ' + p.size + '\u00d7' + p.size + ' Notan board. Can you solve it?';
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Notan', text, url }); return; }
+      catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    try {
+      await navigator.clipboard.writeText(text + ' ' + url);
+      shareBtn.textContent = 'Link copied';
+      announce('Link copied');
+    } catch (_) {
+      shareBtn.textContent = 'Copy failed';
+    }
+    setTimeout(() => { shareBtn.textContent = 'Share blank'; }, 2500);
+  });
   helpBtn.addEventListener('click', openHelp);
   lvlBtn.addEventListener('click', () => openLevels(false));
 
