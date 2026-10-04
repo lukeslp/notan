@@ -12,7 +12,9 @@ Play it at <https://dr.eamer.dev/games/notan/>.
 - New Game+: 20 harder, asymmetric pictures that unlock after level 53.
 - Quick play: random boards at 5, 8, 10, 12 or 15 squares a side. The generator keeps only boards
   with one solution that can be solved line by line, and the same seed always gives the same board.
-- How to play teaches with three small rows you fill in yourself.
+- How to play shows a few small examples; the first levels teach the rest.
+- Hold a row's or column's numbers to lock a finished line. After a Quick play board, Share blank
+  sends the same unsolved board to a friend.
 - Settings for zoom, a light or dark theme (or the system's), and resetting a level or the game.
   Holding the empty background opens Settings.
 - Progress saves in the browser.
