@@ -6,6 +6,7 @@
   'use strict';
   const E = window.InkEngine;
   const LEVELS = window.InkLevels;
+  const PLUS_LEVELS = window.InkPlusLevels;
   const SIZES = [5, 8, 10, 12, 15];
   const BLANK = 0, INK = 1, MARK = 2;
   const STATE = ['blank', 'filled', 'marked empty'];
@@ -33,23 +34,32 @@
     zoom: [100, 115, 130, 150].includes(raw.zoom) ? raw.zoom : 100,
     theme: ['light', 'dark'].includes(raw.theme) ? raw.theme : 'system',
   };
-  // The redrawn leaf keeps credit for its slot, never the old board's cells.
-  if (Object.prototype.hasOwnProperty.call(save.solved, 'leaf')) {
-    if (!Object.prototype.hasOwnProperty.call(save.solved, 'leaf-connected')) save.solved['leaf-connected'] = save.solved.leaf;
-    delete save.solved.leaf;
+  // Redraws keep completion credit, but old cells cannot describe the new art.
+  const migrations = {
+    leaf: 'leaf-connected', boat: 'boat-sail', goggles: 'goggles-bold',
+    alien: 'alien-bold', robot: 'robot-bold',
+  };
+  for (const [oldId, newId] of Object.entries(migrations)) {
+    if (Object.prototype.hasOwnProperty.call(save.solved, oldId)) {
+      if (!Object.prototype.hasOwnProperty.call(save.solved, newId)) save.solved[newId] = save.solved[oldId];
+      delete save.solved[oldId];
+    }
+    delete save.boards[oldId];
+    if (save.at === oldId) save.at = newId;
   }
-  delete save.boards.leaf;
-  if (save.at === 'leaf') save.at = 'leaf-connected';
+  save.plusUnlocked = raw.plusUnlocked === true || typeof save.solved[LEVELS[LEVELS.length - 1].id] === 'number';
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* storage blocked: play on */ }
   }
 
   /* ---------- puzzles ---------- */
-  const RAMP = LEVELS.map((L, index) => {
+  const puzzles = (list, plus = false) => list.map((L, index) => {
     const { w, h, sol } = E.fromArt(L.art);
     const { rows, cols } = E.cluesOf(sol, w, h);
-    return { id: L.id, name: L.name, index, w, h, sol, rows, cols };
+    return { id: L.id, name: L.name, index, plus, w, h, sol, rows, cols };
   });
+  const RAMP = puzzles(LEVELS), PLUS = puzzles(PLUS_LEVELS, true);
+  const sequence = (p) => p.plus ? PLUS : RAMP;
   function newSeed() { return 1 + Math.floor(Math.random() * 99999); }
   function endless(size, seed) {
     for (let s = seed, tries = 0; tries < 20; s++, tries++) {
@@ -73,6 +83,7 @@
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
   const resetConfirm = $('#reset-confirm');
+  const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice');
   const dialogs = [help, levels, settings, resetConfirm];
   const modalOpen = () => dialogs.some((dlg) => dlg.open);
   let cellEls = [], rowHeads = [], colHeads = [];
@@ -85,7 +96,7 @@
     liveTimer = setTimeout(() => { live.textContent = text; }, 40);
   }
   function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
-  function label(p) { return p.endless ? 'Endless ' + p.size + ' by ' + p.size : 'Level ' + (p.index + 1); }
+  function label(p) { return p.endless ? 'Endless ' + p.size + ' by ' + p.size : (p.plus ? 'New Game+ level ' : 'Level ') + (p.index + 1); }
 
   /* ---------- open a puzzle ---------- */
   /* First visit, level 1, nothing touched: after a few quiet seconds one square
@@ -145,6 +156,7 @@
     board.classList.remove('solved');
     caption.classList.remove('show');
     caption.hidden = true;
+    unlockNotice.hidden = true;
     build();
     layout();
     renderAll();
@@ -316,8 +328,8 @@
   }
   function hud() {
     const p = S.puz;
-    lvlText.textContent = p.endless ? '∞ ' + p.size : String(p.index + 1);
-    lvlBtn.setAttribute('aria-label', (p.endless ? 'Endless, ' + p.size + ' by ' + p.size : 'Level ' + (p.index + 1) + ' of ' + RAMP.length) + '. Choose a level');
+    lvlText.textContent = p.endless ? '∞ ' + p.size : (p.plus ? '+' : '') + String(p.index + 1);
+    lvlBtn.setAttribute('aria-label', (p.endless ? 'Endless, ' + p.size + ' by ' + p.size : label(p) + ' of ' + sequence(p).length) + '. Choose a level');
     clock.textContent = fmt(S.time);
     undoBtn.setAttribute('aria-disabled', S.undo.length && !S.solved ? 'false' : 'true');
     modeBtn.setAttribute('aria-pressed', S.mark ? 'true' : 'false');
@@ -471,7 +483,8 @@
       const best = save.solved[p.id];
       save.solved[p.id] = typeof best === 'number' && best > 0 && best < S.time ? best : S.time;
       delete save.boards[p.id];
-      const nx = RAMP[p.index + 1];
+      if (!p.plus && p.index === RAMP.length - 1) save.plusUnlocked = true;
+      const nx = sequence(p)[p.index + 1] || (!p.plus ? PLUS[0] : null);
       save.at = nx ? nx.id : p.id;
     }
     persist();
@@ -479,21 +492,27 @@
     placeCursor();
     board.classList.add('solved');
     capName.textContent = p.name;
+    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1;
     shareBtn.hidden = !p.endless;
     shareBtn.textContent = 'Share blank';
-    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : p.index + 1 < RAMP.length ? 'Next level' : 'Choose what to play next');
+    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
     caption.hidden = false;
     layout();
     requestAnimationFrame(() => requestAnimationFrame(() => caption.classList.add('show')));
     hud();
-    if (!quiet) announce('Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
+    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
     // Keyboard players land on Next; pointer players just tap anywhere.
     if (S.kbd) nextBtn.focus({ preventScroll: true });
   }
   function next() {
     const p = S.puz;
     if (p.endless) open(endless(p.size, save.endless ? save.endless.seed : newSeed()));
-    else if (p.index + 1 < RAMP.length) open(RAMP[p.index + 1]);
+    else if (p.index + 1 < sequence(p).length) open(sequence(p)[p.index + 1]);
+    else if (!p.plus && save.plusUnlocked) {
+      open(PLUS[0]);
+      announce('New Game+ unlocked. ' + label(S.puz) + ', ' + S.puz.w + ' by ' + S.puz.h);
+      return;
+    }
     else { openLevels(true); return; }
     announce(label(S.puz) + ', ' + S.puz.w + ' by ' + S.puz.h);
   }
@@ -776,7 +795,7 @@
   $('#reset-level').addEventListener('click', () => { startOver(); settings.close(); });
   $('#reset-all').addEventListener('click', () => showSheet(resetConfirm, $('#reset-all')));
   $('#confirm-reset').addEventListener('click', () => {
-    save.solved = {}; save.boards = {}; save.endless = null; save.at = null;
+    save.solved = {}; save.boards = {}; save.endless = null; save.at = null; save.plusUnlocked = false;
     persist();
     resetConfirm.close();
     settings.close();
@@ -838,34 +857,41 @@
   }
   function openLevels(atEnd) {
     lvGrid.textContent = '';
+    plusGrid.textContent = '';
+    plusSection.hidden = !save.plusUnlocked;
     let solved = 0;
-    RAMP.forEach((p, i) => {
+    [...RAMP, ...(save.plusUnlocked ? PLUS : [])].forEach((p) => {
+      const i = p.index;
       const li = el('li');
       const b = el('button', 'lv');
       b.type = 'button';
       const done = typeof save.solved[p.id] === 'number';
       b.textContent = String(i + 1);
       if (done) { solved++; b.classList.add('done'); }
-      b.setAttribute('aria-label', 'Level ' + (i + 1) + ', ' + (done ? p.name + ', solved' : p.w + ' by ' + p.h));
-      if (!S.puz.endless && S.puz.index === i) { b.setAttribute('aria-current', 'true'); }
+      b.setAttribute('aria-label', label(p) + ', ' + (done ? p.name + ', solved' : p.w + ' by ' + p.h));
+      if (S.puz.id === p.id) { b.setAttribute('aria-current', 'true'); }
       b.addEventListener('click', () => { levels.close(); open(p); setFocus(0, true); announce(label(p) + ', ' + p.w + ' by ' + p.h); });
       li.append(b);
-      lvGrid.append(li);
+      (p.plus ? plusGrid : lvGrid).append(li);
     });
-    lvMeta.textContent = solved + ' of ' + RAMP.length + ' solved';
+    lvMeta.textContent = solved + ' of ' + (RAMP.length + (save.plusUnlocked ? PLUS.length : 0)) + ' solved';
     showSheet(levels, atEnd ? nextBtn : lvlBtn);
-    (lvGrid.querySelector('[aria-current="true"]') || lvGrid.querySelector('button'))?.focus({ preventScroll: true });
+    (levels.querySelector('[aria-current="true"]') || lvGrid.querySelector('button'))?.focus({ preventScroll: true });
 
   }
 
   /* ---------- URL ---------- */
   function setUrl() {
     const p = S.puz;
-    const q = p.endless ? '?endless=' + p.size + '&seed=' + p.seed : '?level=' + (p.index + 1);
+    const q = p.endless ? '?endless=' + p.size + '&seed=' + p.seed : (p.plus ? '?plus=' : '?level=') + (p.index + 1);
     try { history.replaceState(null, '', location.pathname + q); } catch (_) { /* file:// or sandbox */ }
   }
   function initial() {
     const q = new URLSearchParams(location.search);
+    if (q.has('plus') && save.plusUnlocked) {
+      const n = Number(q.get('plus'));
+      if (Number.isInteger(n) && n >= 1 && n <= PLUS.length) return PLUS[n - 1];
+    }
     if (q.has('endless')) {
       const want = parseInt(q.get('endless'), 10);
       const size = SIZES.reduce((a, b) => (Math.abs(b - want) < Math.abs(a - want) ? b : a), 10);
@@ -882,7 +908,7 @@
       const p = endless(save.endless.size, save.endless.seed);
       if (p) return p;
     }
-    return RAMP.find((p) => p.id === save.at) || RAMP[0];
+    return [...RAMP, ...(save.plusUnlocked ? PLUS : [])].find((p) => p.id === save.at) || RAMP[0];
   }
 
   /* ---------- go ---------- */
@@ -893,5 +919,5 @@
 
   open(initial());
   // How to play opens only from the ? button or the ? key, never on load (Luke, 2026-10-04).
-  window.__notan = { S, RAMP, open, next, endless, isSolved };
+  window.__notan = { S, RAMP, PLUS, open, next, endless, isSolved };
 })();

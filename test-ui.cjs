@@ -31,6 +31,13 @@ const server = http.createServer((req, res) => {
       const base = `http://127.0.0.1:${server.address().port}`;
       await page.goto(base);
       assert.equal(await page.locator('dialog[open]').count(), 0);
+      await page.locator('#lvl-btn').click();
+      assert.equal(await page.locator('#plus-section').isVisible(), false);
+      assert.equal(await page.locator('#plus-grid button').count(), 0);
+      await page.keyboard.press('Escape');
+      await page.goto(base + '/?plus=1');
+      assert.equal(await page.locator('#lvl-text').textContent(), '1');
+      assert.equal(await page.locator('dialog[open]').count(), 0);
       const old = { at: 'leaf', solved: { leaf: 125, square: 9 }, boards: { leaf: { c: '1'.repeat(64), t: 20 }, cup: { c: '100000000', t: 7 } }, endless: { size: 8, seed: 12, c: '0'.repeat(64), t: 6 }, mark: true, seen: true };
       await page.addInitScript(save => { if (!sessionStorage.getItem('old-save-seeded')) { localStorage.setItem('ink.v1', JSON.stringify(save)); sessionStorage.setItem('old-save-seeded', '1'); } }, old);
       await page.goto(base);
@@ -94,13 +101,13 @@ const server = http.createServer((req, res) => {
       await page.locator('#settings-sizes button', { hasText: /^12$/ }).click();
       assert.equal(await page.locator('#solved-sizes').count(), 0);
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 12');
-      await page.locator('#lvl-btn').click(); await page.locator('.lv').nth(27).click();
+      await page.locator('#lvl-btn').click(); await page.locator('#lv-grid .lv').nth(30).click();
       await page.waitForFunction(() => document.activeElement.id === 'lvl-btn');
       await solve();
       assert.equal(await page.locator('#cap-name').textContent(), 'Leaf');
       await page.screenshot({ path: `/tmp/notan-leaf-${viewport.width}-${colorScheme}.png` });
       await page.locator('#next-btn').click();
-      assert.equal(await page.locator('#lvl-text').textContent(), '29');
+      assert.equal(await page.locator('#lvl-text').textContent(), '32');
       await page.locator('#help-btn').click();
       assert.equal(await page.locator('#help #reset-all').count(), 0);
       assert.equal(await page.locator('#help .eg > li').count(), 4);
@@ -119,7 +126,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#reset-confirm').evaluate(d => d.open), true);
       await page.keyboard.press('Escape');
       await page.waitForFunction(() => document.activeElement.id === 'reset-all');
-      assert.equal(await page.locator('#lvl-text').textContent(), '29');
+      assert.equal(await page.locator('#lvl-text').textContent(), '32');
       await page.locator('#reset-all').click(); await page.locator('#confirm-reset').click();
       save = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
       assert.deepEqual(save.solved, {}); assert.deepEqual(save.boards, {});
@@ -291,9 +298,91 @@ const server = http.createServer((req, res) => {
         const saved = await page.evaluate(() => { const s = JSON.parse(localStorage.getItem('ink.v1')); return __notan.S.puz.endless ? s.endless : s.boards[__notan.S.puz.id]; });
         assert(!saved || !saved.locks, 'Solved saves drop locks');
       }
+      // Seed on the next document, after the departing page has saved its board.
+      await page.addInitScript(() => {
+        const seed = sessionStorage.getItem('notan-test-save');
+        if (seed) {
+          localStorage.setItem('ink.v1', seed);
+          sessionStorage.removeItem('notan-test-save');
+        }
+      });
+      // All replaced ids preserve completion credit (including a zero-second solve),
+      // discard stale cells, and migrate the current id. Old Robot also unlocks +.
+      const migrations = { leaf: 'leaf-connected', boat: 'boat-sail', goggles: 'goggles-bold', alien: 'alien-bold', robot: 'robot-bold' };
+      for (const [oldId, newId] of Object.entries(migrations)) {
+        await page.evaluate(oldId => sessionStorage.setItem('notan-test-save', JSON.stringify({
+          at: oldId, solved: { [oldId]: 0 }, boards: { [oldId]: { c: '1'.repeat(225) } },
+        })), oldId);
+        await page.goto(base);
+        const migrated = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
+        assert.equal(migrated.solved[newId], 0);
+        assert.equal(migrated.solved[oldId], undefined);
+        assert.equal(migrated.boards[oldId], undefined);
+        assert.equal(await page.evaluate(() => __notan.S.puz.id), newId);
+        assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
+        assert.equal(migrated.plusUnlocked, oldId === 'robot');
+      }
+      await page.goto(base + '/?plus=1');
+      assert.equal(await page.locator('#lvl-text').textContent(), '+1');
+      // Locked URL falls back to the saved main level, even with saved + progress.
+      await page.evaluate(() => sessionStorage.setItem('notan-test-save', JSON.stringify({ at: 'cup', solved: { 'plus-submarine': 1 } })));
+      await page.goto(base + '/?plus=1');
+      assert.equal(await page.locator('#lvl-text').textContent(), '2');
+      // Solve the final board with actual keyboard input after seeding all but one ink cell.
+      await page.evaluate(() => {
+        const p = __notan.RAMP[52], c = Array.from(p.sol);
+        c[c.indexOf(1)] = 0;
+        sessionStorage.setItem('notan-test-save', JSON.stringify({ at: p.id, boards: { [p.id]: { c: c.join(''), t: 42 } } }));
+      });
+      await page.goto(base + '/?level=53');
+      assert.equal(await page.locator('#unlock-notice').isVisible(), false);
+      await page.locator('#lvl-btn').click();
+      assert.equal(await page.locator('#plus-section').isVisible(), false);
+      await page.keyboard.press('Escape');
+      const missing = await page.evaluate(() => Array.from(__notan.S.puz.sol).findIndex((v, i) => v && !__notan.S.cells[i]));
+      await page.locator('.cell').nth(missing).focus(); await page.keyboard.press('Space');
+      await page.waitForFunction(() => __notan.S.solved);
+      assert.equal(await page.locator('#unlock-notice').textContent(), 'New Game+ unlocked');
+      assert.equal(await page.locator('#unlock-notice').isVisible(), true);
+      await page.screenshot({ path: `/tmp/notan-unlocked-${viewport.width}-${colorScheme}.png` });
+      await page.locator('#next-btn').click();
+      assert.equal(await page.locator('#lvl-text').textContent(), '+1');
+      await page.waitForFunction(() => document.querySelector('#live').textContent.includes('New Game+ unlocked'));
+      assert.match(page.url(), /\?plus=1$/);
+      assert.equal(await page.locator('dialog[open]').count(), 0);
+      await page.locator('#lvl-btn').click();
+      assert.equal(await page.locator('#plus-section').isVisible(), true);
+      assert.equal(await page.locator('#plus-grid button').count(), 20);
+      assert.equal(await page.locator('#plus-grid [aria-current="true"]').textContent(), '1');
+      await page.locator('#plus-grid button').nth(2).click();
+      assert.equal(await page.locator('#lvl-text').textContent(), '+3');
+      await page.reload();
+      assert.equal(await page.locator('#lvl-text').textContent(), '+3');
+      await page.goto(base + '/?plus=1');
+      assert.equal(await page.locator('#lvl-text').textContent(), '+1');
+      // + progress uses ids and survives navigation; its final Next returns to Levels.
+      await page.evaluate(() => {
+        const p = __notan.PLUS[19];
+        const save = JSON.parse(localStorage.getItem('ink.v1'));
+        save.boards[p.id] = { c: Array.from(p.sol).join(''), t: 80 };
+        sessionStorage.setItem('notan-test-save', JSON.stringify(save));
+      });
+      await page.goto(base + '/?plus=20');
+      assert.equal(await page.evaluate(() => __notan.S.solved), true);
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')).solved[__notan.PLUS[19].id]), 80);
+      await page.locator('#next-btn').click();
+      assert.equal(await page.locator('#levels').evaluate(d => d.open), true);
+      await page.keyboard.press('Escape');
+      await page.locator('#settings-btn').click();
+      await page.locator('#reset-all').click(); await page.locator('#confirm-reset').click();
+      await page.goto(base + '/?plus=1');
+      assert.equal(await page.locator('#lvl-text').textContent(), '1');
+      await page.locator('#lvl-btn').click();
+      assert.equal(await page.locator('#plus-section').isVisible(), false);
+      await page.keyboard.press('Escape');
       await cdp.detach();
       assert.deepEqual(errors, []);
-      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: migration, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
+      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: all redraw migrations, New Game+ gating/unlock/URLs/reset, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
       await context.close();
     }
   } finally { await browser.close(); server.close(); }
