@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css?v=bf4b9e6d">
+<link rel="stylesheet" href="./notan.css?v=4e79ec0b">
 </head>
 <body>
 <main id="app">
@@ -67,9 +67,6 @@ try {
     <div class="group" role="group" aria-label="Board">
       <button type="button" class="ib" id="undo-btn" aria-label="Undo" title="Undo (Z)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6.5 6.5 0 1 1 0 13H11"/></svg>
-      </button>
-      <button type="button" class="ib" id="clear-btn" aria-label="Start this board over" title="Start over">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.34 5.66"/><path d="M20 4v7h-7"/></svg>
       </button>
       <button type="button" class="ib" id="mode-btn" aria-label="Mark mode" aria-pressed="false" title="Mark mode: taps mark squares empty">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"/><rect class="m-fill" x="8.5" y="8.5" width="7" height="7" fill="currentColor"/><circle class="m-dot" cx="12" cy="12" r="2" fill="currentColor" style="display:none"/></svg>
@@ -113,14 +110,14 @@ try {
       </li>
     </ul>
     <ul class="keys">
-      <li>Tap a square to fill it; tap again to clear it.</li>
+      <li>Tap a square to fill it immediately; tap it later to clear it. Double-tap to mark it empty with a dot. Double-tap a dotted square to clear it.</li>
       <li>Hold or right-click to mark a square empty with a dot. Do it again to clear the dot.</li>
-      <li>A number fades once its run is finished and closed off by a dot or the edge. That's your bookkeeping, not a check: only the finished picture says you're right.</li>
-      <li>Drag to fill a line, or a block: drag across and down.</li>
+      <li>A number fades and gets a strikethrough once its run is finished and closed off by a dot or the edge. That's your bookkeeping, not a check: only the finished picture says you're right.</li>
+      <li>Drag along a path to fill every square you cross. Start on a filled square to clear a path; use mark mode or hold first to mark a path.</li>
       <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
       <li><b>L</b> locks or unlocks the focused square’s row; <b>Shift+L</b> its column.</li>
-      <li>Bottom left: undo, start over, and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
-      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
+      <li>Bottom left: undo and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
+      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. To start over, choose Settings → Reset → Level. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
     </ul>
     <div class="sheet-foot">
       <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
@@ -175,7 +172,7 @@ try {
 <script src="./engine.js?v=edf79bce"></script>
 <script src="./levels.js?v=172bd6bb"></script>
 <script src="./plus-levels.js?v=4f48e40f"></script>
-<script src="./notan.js?v=5b1c3026"></script>
+<script src="./notan.js?v=36ea3a46"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>
 </html>

@@ -191,7 +191,7 @@ button { font: inherit; color: inherit; }
 .clue.ok { color: var(--done); }
 /* Each number fades on its own once its run is finished, and pops once as it does. */
 .clue span { display: inline-block; transition: color 0.3s; }
-.clue span.n-done { color: var(--done); }
+.clue span.n-done { color: var(--done); text-decoration: line-through; text-decoration-thickness: 2px; }
 .clue span.pop { animation: clue-pop 0.45s ease-out; }
 @keyframes clue-pop {
   0% { transform: scale(1); }
@@ -212,21 +212,23 @@ button { font: inherit; color: inherit; }
   position: relative;
   width: var(--cell);
   height: var(--cell);
+  --guide-x: 0px;
+  --guide-y: 0px;
   --lt: transparent;
   --ll: transparent;
   --lr: var(--line);
   --lb: var(--line);
   box-shadow:
-    inset -1px 0 0 var(--lr),
-    inset 0 -1px 0 var(--lb),
+    inset calc(-1px - var(--guide-x)) 0 0 var(--lr),
+    inset 0 calc(-1px - var(--guide-y)) 0 var(--lb),
     inset 1px 0 0 var(--ll),
     inset 0 1px 0 var(--lt);
   outline: none;
   cursor: pointer;
   transition: box-shadow 0.6s;
 }
-.cell.gx { --lr: var(--guide); }
-.cell.gy { --lb: var(--guide); }
+.cell.gx { --lr: var(--guide); --guide-x: 1px; }
+.cell.gy { --lb: var(--guide); --guide-y: 1px; }
 .cell.t { --lt: var(--frame); }
 .cell.l { --ll: var(--frame); }
 .cell.rt { --lr: var(--frame); }
@@ -242,6 +244,10 @@ button { font: inherit; color: inherit; }
 .cell.t::before { top: 1px; }
 .cell.l::before { left: 1px; }
 .cell.ink::before { transform: scale(1); }
+.cell.gx::before { right: 0; box-shadow: inset -2px 0 var(--bg); }
+.cell.gy::before { bottom: 0; box-shadow: inset 0 -2px var(--bg); }
+.cell.gx.gy::before { box-shadow: inset -2px 0 var(--bg), inset 0 -2px var(--bg); }
+.board.solved .cell::before { box-shadow: none; }
 .cell::after {
   content: "";
   position: absolute;
@@ -484,3 +490,5 @@ dialog.sheet::backdrop { background: var(--scrim); }
 .cc.locked::before { height: 2px; bottom: 3px; left: 25%; right: 25%; }
 .eg-clue.locked { position: relative; color: var(--done); }
 .eg-clue.locked::before { width: 2px; right: -5px; top: 0; bottom: 0; }
+
+#mode-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }

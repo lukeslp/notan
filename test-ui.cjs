@@ -74,6 +74,8 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 5');
       // Solve through real keyboard input, using the engine only to identify filled cells.
       async function solve() {
+        // Let the dialog's close handler restore focus before focusing the grid.
+        await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
         const { sol, w } = await page.evaluate(() => ({ sol: Array.from(window.__notan.S.puz.sol), w: window.__notan.S.puz.w }));
         await page.locator('.cell').first().focus();
         for (let i = 0; i < sol.length; i++) {
@@ -102,7 +104,7 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#solved-sizes').count(), 0);
       assert.equal(await page.locator('#lvl-text').textContent(), '∞ 12');
       await page.locator('#lvl-btn').click(); await page.locator('#lv-grid .lv').nth(30).click();
-      await page.waitForFunction(() => document.activeElement.id === 'lvl-btn');
+      await page.waitForFunction(() => document.activeElement === document.querySelector('#grid .cell'));
       await solve();
       assert.equal(await page.locator('#cap-name').textContent(), 'Leaf');
       await page.screenshot({ path: `/tmp/notan-leaf-${viewport.width}-${colorScheme}.png` });
@@ -216,11 +218,113 @@ const server = http.createServer((req, res) => {
       await page.waitForTimeout(600); await touch('touchEnd');
       assert.equal(await page.locator('.cell').first().evaluate(e => e.classList.contains('mark')), true);
       assert.equal(await page.locator('#settings').evaluate(d => d.open), false);
+      // Immediate taps, double-tap replacement, path interpolation, and visual cues.
+      assert.equal(await page.locator('#clear-btn').count(), 0);
+      assert.equal(await page.locator('.bar [aria-label="Board"] button').count(), 2);
+      await page.goto(base + '/?endless=10&seed=42');
+      async function resetLevel() {
+        await page.locator('#settings-btn').click(); await page.locator('#reset-level').click();
+        await page.waitForFunction(() => document.activeElement.id === 'settings-btn');
+      }
+      await resetLevel();
+      const squares = page.locator('#grid .cell');
+      async function point(i) { const b = await squares.nth(i).boundingBox(); return { x: b.x + b.width / 2, y: b.y + b.height / 2 }; }
+      async function tap(i) { const p = await point(i); await touch('touchStart', p.x, p.y); await touch('touchEnd'); }
+      const origin = await point(0);
+      const before = await page.evaluate(() => __notan.S.undo.length);
+      await touch('touchStart', origin.x, origin.y);
+      assert.equal(await squares.first().evaluate(e => e.classList.contains('ink')), true, 'Fill is immediate');
+      await touch('touchEnd'); await tap(0);
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 2);
+      assert.equal(await page.evaluate(() => __notan.S.undo.length), before + 1);
+      await page.keyboard.press('z');
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 0);
+      await squares.first().focus(); await page.keyboard.press('X');
+      await tap(0); await tap(0);
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 0, 'Double-tap dotted square clears');
+      await page.keyboard.press('z');
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 2);
+      await resetLevel();
+      // Sparse diagonal samples then a turn: no rectangle or skipped cells.
+      const end = await point(44), turn = await point(40);
+      await page.mouse.move(origin.x, origin.y); await page.mouse.down();
+      await page.mouse.move(end.x, end.y); await page.mouse.move(turn.x, turn.y); await page.mouse.up();
+      const pathCells = [0, 11, 22, 33, 40, 41, 42, 43, 44];
+      assert.deepEqual(await page.evaluate(() => Array.from(__notan.S.cells).flatMap((v, i) => v === 1 ? [i] : [])), pathCells);
+      await page.keyboard.press('z');
+      assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
+      await page.locator('#mode-btn').click();
+      assert.equal(await page.locator('#mode-btn').getAttribute('aria-pressed'), 'true');
+      assert.equal(await page.locator('#mode-btn').evaluate(e => getComputedStyle(e).backgroundColor), colorScheme === 'light' ? 'rgb(0, 0, 0)' : 'rgb(255, 255, 255)');
+      await page.locator('#mode-btn').click();
+      await squares.nth(4).focus(); await page.keyboard.press('Space');
+      const guides = await squares.nth(4).evaluate(e => ({ line: getComputedStyle(e).boxShadow, fill: getComputedStyle(e, '::before').boxShadow, bg: getComputedStyle(document.body).backgroundColor }));
+      assert.match(guides.line, /-2px/);
+      assert.match(guides.fill, /-2px/);
+      assert(guides.fill.includes(guides.bg), 'Guide contrasts with filled square');
+      // Force focus to move between synchronous native restoration and the queued
+      // close event. The old handler stole it, so Space reopened Settings and the
+      // next Space generated a different puzzle while this test kept the old solution.
+      await page.locator('#settings-btn').click();
+      const resetFocus = await page.evaluate(async () => {
+        const dialog = document.querySelector('#settings');
+        const closed = new Promise(resolve => dialog.addEventListener('close', resolve, { once: true }));
+        document.querySelector('#reset-level').click();
+        const nativeFocus = document.activeElement.id;
+        const first = document.querySelector('#grid .cell');
+        first.focus();
+        await closed;
+        return { nativeFocus, keptCell: document.activeElement === first,
+          seed: __notan.S.puz.seed, drag: __notan.S.drag, pending: __notan.S.pending, lastTap: __notan.S.lastTap };
+      });
+      assert.deepEqual(resetFocus, { nativeFocus: 'settings-btn', keptCell: true,
+        seed: 42, drag: null, pending: null, lastTap: null });
+      await page.keyboard.press('x');
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 2);
+      await page.keyboard.press('Delete');
+      const solRow = await page.evaluate(() => Array.from(__notan.S.puz.sol).slice(0, 10));
+      // A run counts as finished only when closed off by a dot or the edge, so dot the empties too
+      // (the board is random, so the row's runs don't always touch the edges).
+      for (let i = 0; i < 10; i++) { await squares.nth(i).focus(); await page.keyboard.press(solRow[i] ? 'Space' : 'x'); }
+      assert.deepEqual(await page.evaluate(() => ({ seed: __notan.S.puz.seed,
+        row: Array.from(__notan.S.cells).slice(0, 10) })),
+      { seed: 42, row: solRow.map(v => v ? 1 : 2) });
+      // Completed clues reflect the row after each move.
+      await page.locator('.rc').first().locator('.n-done').first().waitFor({ timeout: 3000 });
+      assert.equal(await page.locator('.rc .n-done').first().evaluate(e => getComputedStyle(e).textDecorationLine), 'line-through');
+      await resetLevel();
+      // Hold converts the immediate fill, then paints a marked path in one move.
+      const holdStart = await point(0), holdEnd = await point(3);
+      await touch('touchStart', holdStart.x, holdStart.y); await page.waitForTimeout(420);
+      await touch('touchMove', holdEnd.x, holdEnd.y); await touch('touchEnd');
+      assert.deepEqual(await page.evaluate(() => Array.from(__notan.S.cells).slice(0, 4)), [2, 2, 2, 2]);
+      await page.keyboard.press('z');
+      assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
+      await squares.first().focus(); await page.keyboard.press('Space');
+      await page.mouse.move(holdStart.x, holdStart.y); await page.mouse.down();
+      await page.mouse.move(holdEnd.x, holdEnd.y); await page.mouse.up();
+      assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false, 'Filled start clears the path');
+      await resetLevel();
+      await tap(0); await page.waitForTimeout(330); await tap(0);
+      assert.equal(await page.evaluate(() => __notan.S.cells[0]), 0, 'Later tap clears normally');
+      await resetLevel();
+      await tap(0); await tap(1);
+      assert.deepEqual(await page.evaluate(() => Array.from(__notan.S.cells).slice(0, 2)), [1, 1], 'Different cells do not double-tap');
+      // A final solving fill can still be replaced by the second tap.
+      await page.goto(base + '/?level=1'); await resetLevel();
+      await page.locator('.cell').nth(0).focus(); await page.keyboard.press('Space');
+      await page.locator('.cell').nth(1).focus(); await page.keyboard.press('Space');
+      await page.locator('.cell').nth(2).focus(); await page.keyboard.press('Space');
+      await tap(3); await tap(3);
+      assert.equal(await page.evaluate(() => __notan.S.solved), false);
+      assert.equal(await page.evaluate(() => __notan.S.cells[3]), 2);
+      await page.keyboard.press('z');
+      assert.equal(await page.evaluate(() => __notan.S.cells[3]), 0);
       // Locks are board state, independent of move history, on levels and quick play.
       for (const quickPlay of [false, true]) {
         await page.goto(base + (quickPlay ? '/?endless=5&seed=42' : '/?level=2'));
         assert.equal(await page.evaluate(() => !!__notan.S.puz.endless), quickPlay);
-        await page.locator('#clear-btn').click();
+        await page.locator('#settings-btn').click(); await page.locator('#reset-level').click();
         if (await page.locator('#mode-btn').getAttribute('aria-pressed') === 'true') await page.locator('#mode-btn').click();
         const cells = page.locator('#grid .cell');
         const w = await page.evaluate(() => __notan.S.puz.w);
@@ -280,11 +384,11 @@ const server = http.createServer((req, res) => {
         await hold(column);
         assert.match(await column.getAttribute('aria-label'), /^Column 1, unlocked/);
         // Blank boards also retain locks, and Start over clears those locks.
-        await page.locator('#clear-btn').click();
+        await page.locator('#settings-btn').click(); await page.locator('#reset-level').click();
         await hold(row);
         await page.reload();
         assert.equal(await page.locator('#grid .locked').count(), 1);
-        await page.locator('#clear-btn').click();
+        await page.locator('#settings-btn').click(); await page.locator('#reset-level').click();
         await page.reload();
         assert.equal(await page.locator('#grid .locked').count(), 0);
         assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
@@ -382,7 +486,7 @@ const server = http.createServer((req, res) => {
       await page.keyboard.press('Escape');
       await cdp.detach();
       assert.deepEqual(errors, []);
-      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: all redraw migrations, New Game+ gating/unlock/URLs/reset, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
+      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: double-tap/undo, snake paths, guides, strikethrough, all redraw migrations, New Game+ gating/unlock/URLs/reset, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
       await context.close();
     }
   } finally { await browser.close(); server.close(); }

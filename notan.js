@@ -11,7 +11,7 @@
   const BLANK = 0, INK = 1, MARK = 2;
   const STATE = ['blank', 'filled', 'marked empty'];
   const KEY = 'ink.v1'; // the game was called Ink until 2026-10-04; the key stays so progress carries over
-  const HOLD_MS = 380;
+  const HOLD_MS = 380, DOUBLE_MS = 300;
   const $ = (s) => document.querySelector(s);
 
   /* ---------- storage (everything optional; private mode just doesn't save) ---------- */
@@ -73,12 +73,12 @@
   const S = {
     puz: null, cells: null, undo: [], locks: { row: [], col: [] }, solved: false, solvedAt: 0,
     time: 0, focus: 0, mark: save.mark, drag: null, pending: null,
-    kbd: false, geo: null, lastTo: null,
+    lastTap: null, kbd: false, geo: null, lastTo: null,
   };
   const board = $('#board'), grid = $('#grid'), bandR = $('.band-r'), bandC = $('.band-c');
   const cursor = $('.cursor'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
   const lvlBtn = $('#lvl-btn'), lvlText = $('#lvl-text'), clock = $('#clock'), live = $('#live');
-  const undoBtn = $('#undo-btn'), clearBtn = $('#clear-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
+  const undoBtn = $('#undo-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
   const shareBtn = $('#share-btn');
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
@@ -87,6 +87,7 @@
   const dialogs = [help, levels, settings, resetConfirm];
   const modalOpen = () => dialogs.some((dlg) => dlg.open);
   let cellEls = [], rowHeads = [], colHeads = [];
+  let finishTimer = 0;
 
   function el(tag, cls) { const n = document.createElement(tag); if (cls) n.className = cls; return n; }
   let liveTimer = 0;
@@ -119,8 +120,10 @@
   function open(puz) {
     if (!puz) return;
     stopClock();
+    clearTimeout(finishTimer);
     S.puz = puz;
     S.undo = [];
+    S.lastTap = null;
     cancelClueHold();
     S.locks = { row: Array(puz.h).fill(false), col: Array(puz.w).fill(false) };
     S.solved = false;
@@ -365,6 +368,7 @@
     return S.locks.row[Math.floor(i / S.puz.w)] || S.locks.col[i % S.puz.w];
   }
   function toggleLock(kind, k) {
+    S.lastTap = null;
     if (S.solved || S.drag || S.pending) return;
     S.locks[kind][k] = !S.locks[kind][k];
     clearNudge();
@@ -389,12 +393,19 @@
     const done = updateLines(idx);
     storeBoard();
     hud();
-    if (isSolved()) { finish(false); return; }
+    clearTimeout(finishTimer);
+    if (isSolved()) {
+      // Keep the final fill immediate, but allow its second tap before revealing.
+      if (S.lastTap) finishTimer = setTimeout(() => { if (!S.drag && isSolved()) finish(false); }, DOUBLE_MS);
+      else finish(false);
+      return;
+    }
     if (speak) announce(speak + (done.length ? '. ' + done.join(' and ') + ' done' : ''));
   }
 
   /* A single keyboard move. */
   function act(i, to) {
+    S.lastTap = null;
     if (S.solved || isLocked(i) || S.cells[i] === to) return;
     pushUndo(Int8Array.from(S.cells));
     S.cells[i] = to;
@@ -404,46 +415,79 @@
     afterChange([i], to === BLANK ? 'cleared' : STATE[to]);
   }
 
-  /* Pointer gestures: the first square sets the change (from -> to) and a
-   * drag applies it to the rectangle between that square and the pointer
-   * (a line when it stays in one row or column), to squares in the same
-   * state, rubber-banding as the pointer moves back. */
-  function begin(i, kind, pid) {
+  /* One snapshot per path; a second tap revises the first tap's transaction. */
+  function begin(i, kind, e) {
     if (S.solved || isLocked(i)) return;
-    const from = S.cells[i];
-    const to = kind === 'alt' ? altOf(from) : tapOf(from);
-    S.drag = { id: pid, start: i, from, to, snap: Int8Array.from(S.cells), painted: [] };
+    clearTimeout(finishTimer);
+    const last = S.lastTap;
+    const double = kind === 'tap' && last && last.i === i &&
+      performance.now() - last.time <= DOUBLE_MS && S.undo.at(-1) === last.snap;
+    S.lastTap = null;
+    const before = Int8Array.from(S.cells);
+    const snap = double ? S.undo.pop() : Int8Array.from(S.cells);
+    const from = snap[i];
+    const to = double ? toggleMark(from) : kind === 'alt' ? altOf(from) : tapOf(from);
+    S.drag = { id: e.pointerId, start: i, to, snap, before, double, painted: new Set(),
+      point: pointAt(e), tap: kind === 'tap' && !double, moved: false };
     startClock();
-    paintTo(i);
+    paintCell(i);
   }
-  function paintTo(j) {
+  function paintCell(i) {
     const d = S.drag;
-    if (!d || j < 0) return;
-    const w = S.puz.w;
-    const r0 = Math.floor(d.start / w), c0 = d.start % w;
-    const r1 = Math.floor(j / w), c1 = j % w;
-    const span = [];
-    for (let r = Math.min(r0, r1); r <= Math.max(r0, r1); r++)
-      for (let c = Math.min(c0, c1); c <= Math.max(c0, c1); c++) span.push(r * w + c);
-    const tip = j;
-    const want = new Set(span.filter((k) => !isLocked(k) && d.snap[k] === d.from));
-    const touched = [];
-    d.painted.forEach((k) => { if (!want.has(k)) { S.cells[k] = d.snap[k]; touched.push(k); } });
-    want.forEach((k) => { if (S.cells[k] !== d.to) { S.cells[k] = d.to; touched.push(k); } });
-    d.painted = [...want];
-    touched.forEach(renderCell);
-    if (touched.length) updateLines(touched);
-    setFocus(tip, false);
+    if (isLocked(i)) return;
+    d.painted.add(i);
+    S.cells[i] = d.to;
+    renderCell(i);
   }
-  function endGesture() {
+  function pointAt(e) {
+    const b = board.getBoundingClientRect(), g = S.geo;
+    return { x: Math.max(0, Math.min(S.puz.w - 0.000001, (e.clientX - b.left - g.cw) / g.cell)),
+      y: Math.max(0, Math.min(S.puz.h - 0.000001, (e.clientY - b.top - g.ch) / g.cell)) };
+  }
+  function paintTo(e) {
+    const d = S.drag;
+    if (!d) return;
+    const a = d.point, b = pointAt(e), ts = [0, 1];
+    // Split the actual pointer segment at grid boundaries. Midpoints visit
+    // every crossed square, even with sparse samples or a diagonal path.
+    for (const axis of ['x', 'y']) {
+      const delta = b[axis] - a[axis];
+      if (!delta) continue;
+      for (let n = Math.floor(Math.min(a[axis], b[axis])) + 1; n < Math.max(a[axis], b[axis]); n++)
+        ts.push((n - a[axis]) / delta);
+    }
+    ts.sort((x, y) => x - y);
+    const visit = t => {
+      const i = Math.floor(a.y + (b.y - a.y) * t) * S.puz.w + Math.floor(a.x + (b.x - a.x) * t);
+      if (i !== d.start) d.moved = true;
+      paintCell(i);
+      return i;
+    };
+    for (let n = 1; n < ts.length; n++) if (ts[n] - ts[n - 1] > 1e-10) visit((ts[n] + ts[n - 1]) / 2);
+    setFocus(visit(1), false);
+    d.point = b;
+    updateLines([...d.painted]);
+  }
+  function endGesture(e) {
     const d = S.drag;
     S.drag = null;
-    if (!d || !d.painted.length) return;
+    if (!d || !d.painted.size) return;
+    if (e.type !== 'pointerup') {
+      S.cells = d.before;
+      if (d.double) pushUndo(d.snap);
+      renderAll();
+      storeBoard();
+      return;
+    }
     pushUndo(d.snap);
-    afterChange(d.painted, null);
+    if (e.type === 'pointerup' && d.tap && !d.moved)
+      S.lastTap = { i: d.start, time: performance.now(), snap: d.snap };
+    afterChange([...d.painted], null);
   }
 
   function undo() {
+    clearTimeout(finishTimer);
+    S.lastTap = null;
     if (S.solved) return;
     const snap = S.undo.pop();
     if (!snap) { announce('Nothing to undo'); return; }
@@ -457,6 +501,8 @@
     announce('Undone');
   }
   function startOver() {
+    clearTimeout(finishTimer);
+    S.lastTap = null;
     if (S.solved) { open(S.puz); announce(label(S.puz) + ' again'); return; }
     const hadLocks = S.locks.row.some(Boolean) || S.locks.col.some(Boolean);
     S.locks.row.fill(false); S.locks.col.fill(false);
@@ -588,16 +634,20 @@
     S.kbd = false;
     try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
     setFocus(i, false);
-    if (e.pointerType === 'touch') {
+    begin(i, e.button === 2 ? 'alt' : 'tap', e);
+    if (e.pointerType === 'touch' && S.drag && S.drag.tap) {
       const p = { i, id: e.pointerId, timer: 0 };
       p.timer = setTimeout(() => {
-        if (S.pending !== p) return;
+        if (S.pending !== p || !S.drag) return;
         S.pending = null;
-        begin(p.i, 'alt', p.id);
+        S.drag.to = altOf(S.drag.snap[i]);
+        S.drag.tap = false;
+        paintCell(i);
+        updateLines([i]);
         try { navigator.vibrate && navigator.vibrate(12); } catch (_) { /* no haptics */ }
       }, HOLD_MS);
       S.pending = p;
-    } else begin(i, e.button === 2 ? 'alt' : 'tap', e.pointerId);
+    }
   });
   board.addEventListener('pointermove', (e) => {
     if (clueHold && e.pointerId === clueHold.id) {
@@ -605,30 +655,20 @@
       return;
     }
     if (S.solved || !S.geo) return;
-    if (S.pending && e.pointerId === S.pending.id) {
-      const j = cellAt(e.clientX, e.clientY, true);
-      if (j !== S.pending.i) {
-        const p = S.pending;
-        clearTimeout(p.timer);
-        S.pending = null;
-        begin(p.i, 'tap', p.id);
-        paintTo(j);
-      }
+    if (S.drag && e.pointerId === S.drag.id) {
+      for (const sample of e.getCoalescedEvents?.().length ? e.getCoalescedEvents() : [e]) paintTo(sample);
+      if (S.pending && S.drag.moved) { clearTimeout(S.pending.timer); S.pending = null; }
       return;
     }
-    if (S.drag && e.pointerId === S.drag.id) { paintTo(cellAt(e.clientX, e.clientY, true)); return; }
     if (e.pointerType === 'mouse') { const i = cellAt(e.clientX, e.clientY); showBands(i); }
   });
   function pointerEnd(e) {
     if (clueHold && e.pointerId === clueHold.id) cancelClueHold();
-    if (S.pending && e.pointerId === S.pending.id) {
-      const p = S.pending;
-      clearTimeout(p.timer);
-      S.pending = null;
-      if (e.type === 'pointerup') { begin(p.i, 'tap', p.id); endGesture(); }
-      return;
+    if (S.pending && e.pointerId === S.pending.id) { clearTimeout(S.pending.timer); S.pending = null; }
+    if (S.drag && e.pointerId === S.drag.id) {
+      if (e.type === 'pointerup') paintTo(e);
+      endGesture(e);
     }
-    if (S.drag && e.pointerId === S.drag.id) endGesture();
   }
   board.addEventListener('pointerup', pointerEnd);
   board.addEventListener('pointercancel', pointerEnd);
@@ -733,8 +773,8 @@
 
   /* ---------- buttons ---------- */
   undoBtn.addEventListener('click', undo);
-  clearBtn.addEventListener('click', startOver);
   modeBtn.addEventListener('click', () => {
+    S.lastTap = null;
     S.mark = !S.mark;
     save.mark = S.mark;
     persist();
@@ -770,7 +810,14 @@
     if (dlg.open) return;
     dlg.showModal();
     dlg.scrollTop = 0;
-    dlg.addEventListener('close', () => { if (opener.isConnected && opener.getClientRects().length) opener.focus({ preventScroll: true }); }, { once: true });
+    dlg.addEventListener('close', () => {
+      // close() restores native focus synchronously, but this event is queued.
+      // Keep any focus chosen since then (by the player or a new board/dialog).
+      const active = document.activeElement;
+      if (!dlg.open && (active === document.body || dlg.contains(active)) &&
+          opener.isConnected && opener.getClientRects().length)
+        opener.focus({ preventScroll: true });
+    }, { once: true });
   }
   function openHelp() { showSheet(help, helpBtn); }
   function openSettings(opener = settingsBtn) {
