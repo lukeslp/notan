@@ -3,7 +3,8 @@
  *    propagate count) and the line solver finishes it without guessing.
  * 2. The ramp eases in: level 1 is a tiny board whose every line is all or
  *    nothing, it ends on 15x15, and the measured band never moves by more
- *    than one between neighbors.
+ *    than one between neighbors. Levels 41–53 have at most three
+ *    mirror-symmetric pictures, spaced out as breathers.
  * 3. The endless generator only yields unique, line-solvable boards, and
  *    the same seed always gives the same board. */
 const E = require('./engine.js');
@@ -19,6 +20,7 @@ const measured = LEVELS.map((L, i) => {
   if (ids.has(L.id)) bad(`duplicate id ${L.id}`);
   if (names.has(L.name)) bad(`duplicate name ${L.name}`);
   ids.add(L.id); names.add(L.name);
+  if (L.art.some(row => row.length !== L.art[0].length || /[^.#]/.test(row))) bad(`${L.id}: malformed art`);
   const { w, h, sol } = E.fromArt(L.art);
   const { rows, cols } = E.cluesOf(sol, w, h);
   const n = E.countSolutions(rows, cols, w, h, 2);
@@ -50,6 +52,15 @@ for (let i = 1; i < measured.length; i++) {
 }
 const bands = measured.map((x) => x.m.band);
 console.log('bands: ' + bands.join(' '));
+
+// Big pictures should reward solving the whole board. A mirror across either
+// axis counts once, even if a picture has both left-right and top-bottom symmetry.
+const breathers = measured.slice(40, 53).filter(({ L, h }) =>
+  L.art.every(row => row === [...row].reverse().join('')) ||
+  L.art.every((row, r) => row === L.art[h - 1 - r])
+);
+if (breathers.length > 3) bad(`${breathers.length} mirror-symmetric pictures in levels 41–53 (at most 3)`);
+console.log('late-ramp breathers: ' + breathers.map(({ L }) => L.name).join(', '));
 
 // The former 28–30 spike must not return after the band-4 neighbors.
 for (let i = 27; i <= 34; i++) {

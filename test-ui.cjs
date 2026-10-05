@@ -411,20 +411,28 @@ const server = http.createServer((req, res) => {
         }
       });
       // All replaced ids preserve completion credit (including a zero-second solve),
-      // discard stale cells, and migrate the current id. Old Robot also unlocks +.
-      const migrations = { leaf: 'leaf-connected', boat: 'boat-sail', goggles: 'goggles-bold', alien: 'alien-bold', robot: 'robot-bold' };
-      for (const [oldId, newId] of Object.entries(migrations)) {
-        await page.evaluate(oldId => sessionStorage.setItem('notan-test-save', JSON.stringify({
-          at: oldId, solved: { [oldId]: 0 }, boards: { [oldId]: { c: '1'.repeat(225) } },
-        })), oldId);
+      // discard stale cells, and migrate the current id through every redraw.
+      // Both generations of old Robot also unlock +.
+      const migrations = {
+        leaf: 'leaf-connected', boat: 'boat-sail',
+        goggles: 'goggles-tilted', alien: 'alien-antenna', robot: 'robot-wave',
+        jellyfish: 'jellyfish-drift', mountain: 'mountain-ridge', crab: 'crab-raised',
+        lion: 'lion-profile', beetle: 'beetle-angled',
+        'alien-bold': 'alien-antenna', 'goggles-bold': 'goggles-tilted', 'robot-bold': 'robot-wave',
+      };
+      for (const [oldId, newId] of Object.entries(migrations)) for (const time of [0, 125]) {
+        await page.evaluate(({ oldId, time }) => sessionStorage.setItem('notan-test-save', JSON.stringify({
+          at: oldId, solved: { [oldId]: time }, boards: { [oldId]: { c: '1'.repeat(225) } },
+        })), { oldId, time });
         await page.goto(base);
         const migrated = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
-        assert.equal(migrated.solved[newId], 0);
+        assert.deepEqual(migrated.solved, { [newId]: time });
         assert.equal(migrated.solved[oldId], undefined);
         assert.equal(migrated.boards[oldId], undefined);
+        assert.equal(migrated.at, newId);
         assert.equal(await page.evaluate(() => __notan.S.puz.id), newId);
         assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
-        assert.equal(migrated.plusUnlocked, oldId === 'robot');
+        assert.equal(migrated.plusUnlocked, newId === 'robot-wave');
       }
       await page.goto(base + '/?plus=1');
       assert.equal(await page.locator('#lvl-text').textContent(), '+1');

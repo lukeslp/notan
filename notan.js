@@ -38,6 +38,9 @@
   const migrations = {
     leaf: 'leaf-connected', boat: 'boat-sail', goggles: 'goggles-bold',
     alien: 'alien-bold', robot: 'robot-bold',
+    jellyfish: 'jellyfish-drift', mountain: 'mountain-ridge', crab: 'crab-raised',
+    lion: 'lion-profile', beetle: 'beetle-angled',
+    'alien-bold': 'alien-antenna', 'goggles-bold': 'goggles-tilted', 'robot-bold': 'robot-wave',
   };
   for (const [oldId, newId] of Object.entries(migrations)) {
     if (Object.prototype.hasOwnProperty.call(save.solved, oldId)) {
