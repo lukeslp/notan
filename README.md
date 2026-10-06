@@ -18,8 +18,7 @@ Play it at <https://dr.eamer.dev/games/notan/>.
 - Settings for zoom, a light or dark theme (or the system's), and resetting a level or the game.
   Holding the empty background opens Settings.
 - A hint, in Settings and at the bottom of How to play, for when you are stuck. It rings one wrong
-  square, or a square you can work out and the numbers that settle it. A level solved with a hint
-  doesn’t count.
+  square, or a square you can work out and the numbers that settle it.
 - Progress saves in the browser.
 
 ## Run it
