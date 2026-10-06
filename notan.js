@@ -27,6 +27,7 @@
     at: typeof raw.at === 'string' ? raw.at : null,
     solved: obj(raw.solved),
     boards: obj(raw.boards),
+    hinted: obj(raw.hinted),
     endless: raw.endless && typeof raw.endless === 'object' ? raw.endless : null,
     seen: !!raw.seen,
     mark: !!raw.mark,
@@ -95,7 +96,7 @@
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
   const resetConfirm = $('#reset-confirm'), hintBtns = document.querySelectorAll('.hint-action');
-  const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice'), hintNotice = $('#hint-notice');
+  const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice');
   const dialogs = [help, levels, settings, resetConfirm];
   const modalOpen = () => dialogs.some((dlg) => dlg.open);
   let cellEls = [], rowHeads = [], colHeads = [];
@@ -537,8 +538,7 @@
   }
 
   /* ---------- hint ---------- */
-  /* A last resort, kept in Settings and How to play; a level solved with one
-   * does not count. It rings one wrong square if there is one, the most
+  /* A last resort, kept in Settings and How to play. It rings one wrong square if there is one, the most
    * recently changed first. Otherwise it rings a square the board already
    * settles and the clue that settles it, preferring a square to fill:
    * empty squares never have to be marked, so "leave this empty" helps less.
@@ -613,15 +613,17 @@
     if (p.endless) {
       save.endless = { size: p.size, seed: newSeed(), c: '', t: 0 };
     } else {
-      // A hinted solve moves the player on but records nothing: no time, no
-      // tick in Levels, no New Game+. Playing it again without a hint counts.
-      if (!S.hinted) {
-        const best = save.solved[p.id];
-        save.solved[p.id] = typeof best === 'number' && best > 0 && best < S.time ? best : S.time;
-        if (!p.plus && p.index === RAMP.length - 1) save.plusUnlocked = true;
+      const best = save.solved[p.id];
+      if (!(typeof best === 'number' && best > 0 && best < S.time)) {
+        save.solved[p.id] = S.time;
+        // A hinted solve counts like any other; this only remembers that the best
+        // time came from one, so a leaderboard could leave it out.
+        if (S.hinted) save.hinted[p.id] = true;
+        else delete save.hinted[p.id];
       }
       delete save.boards[p.id];
-      const nx = sequence(p)[p.index + 1] || (!p.plus && save.plusUnlocked ? PLUS[0] : null);
+      if (!p.plus && p.index === RAMP.length - 1) save.plusUnlocked = true;
+      const nx = sequence(p)[p.index + 1] || (!p.plus ? PLUS[0] : null);
       save.at = nx ? nx.id : p.id;
     }
     persist();
@@ -629,16 +631,15 @@
     placeCursor();
     board.classList.add('solved');
     capName.textContent = p.name;
-    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1 || S.hinted;
-    hintNotice.hidden = p.endless || !S.hinted;
+    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1;
     shareBtn.hidden = !p.endless;
     shareBtn.textContent = 'Share blank';
-    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 && save.plusUnlocked ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
+    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
     caption.hidden = false;
     layout();
     requestAnimationFrame(() => requestAnimationFrame(() => caption.classList.add('show')));
     hud();
-    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. ' + (!hintNotice.hidden ? 'A hint was used, so it does not count. ' : '') + 'Press Enter for the next one.');
+    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
     // Keyboard players land on Next; pointer players just tap anywhere.
     if (S.kbd) nextBtn.focus({ preventScroll: true });
   }
@@ -939,7 +940,7 @@
   }));
   $('#reset-all').addEventListener('click', () => showSheet(resetConfirm, $('#reset-all')));
   $('#confirm-reset').addEventListener('click', () => {
-    save.solved = {}; save.boards = {}; save.endless = null; save.at = null; save.plusUnlocked = false;
+    save.solved = {}; save.boards = {}; save.hinted = {}; save.endless = null; save.at = null; save.plusUnlocked = false;
     persist();
     resetConfirm.close();
     settings.close();

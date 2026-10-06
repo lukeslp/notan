@@ -479,22 +479,23 @@ const server = http.createServer((req, res) => {
       assert.equal(await page.locator('#grid .clue.hinted').count(), 1);
       assert.equal(await page.locator('.hint.on:not(.wrong)').isVisible(), true);
       await page.screenshot({ path: `/tmp/notan-hint-${viewport.width}-${colorScheme}.png` });
-      // The flag survives a reload and a reset; the hinted solve moves on but records nothing.
+      // The flag survives a reload and a reset; the hinted solve counts, and the save notes the hint.
       await page.reload();
       assert.equal(await page.evaluate(() => __notan.S.hinted), true);
       await resetLevel();
       await solve();
-      assert.equal(await page.locator('#hint-notice').isVisible(), true);
       const hintedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
-      assert.equal(hintedSave.solved.cup, undefined);
+      assert.equal(typeof hintedSave.solved.cup, 'number');
+      assert.equal(hintedSave.hinted.cup, true);
       assert.equal(hintedSave.boards.cup, undefined);
       assert.equal(hintedSave.at, 'plus');
-      // Played again without a hint, it counts.
+      // A faster solve without a hint replaces the best time and clears the note.
       await page.goto(base + '/?level=2');
       assert.equal(await page.evaluate(() => __notan.S.hinted), false);
       await solve();
-      assert.equal(await page.locator('#hint-notice').isVisible(), false);
-      assert.equal(typeof await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')).solved.cup), 'number');
+      const cleanSave = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
+      assert(cleanSave.solved.cup < hintedSave.solved.cup);
+      assert.equal(cleanSave.hinted.cup, undefined);
       // Hand the New Game+ checks below the unlocked save they expect.
       await page.evaluate(() => sessionStorage.setItem('notan-test-save', JSON.stringify({ at: 'robot-wave', solved: { 'robot-wave': 125 } })));
       await page.goto(base + '/?plus=1');
