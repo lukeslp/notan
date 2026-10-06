@@ -158,6 +158,25 @@ button { font: inherit; color: inherit; }
   display: none;
 }
 .cursor.on { display: block; }
+/* Hint: a ring on one square, dashed when the square is wrong, solid when the
+ * outlined clue settles it. It pulses three times, then stays until the next move. */
+.hint {
+  position: absolute;
+  z-index: 3;
+  width: var(--cell);
+  height: var(--cell);
+  border: 3px solid var(--ink);
+  box-shadow: 0 0 0 1px var(--bg), inset 0 0 0 1px var(--bg);
+  pointer-events: none;
+  display: none;
+}
+.hint.on { display: block; animation: hint-pulse 1.2s ease-in-out 3; }
+.hint.wrong { border-style: dashed; }
+@keyframes hint-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.15; }
+}
+.clue.hinted { outline: 2px solid var(--ink); outline-offset: -2px; }
 
 .grid { position: relative; z-index: 1; }
 .gr { display: flex; }
@@ -276,7 +295,8 @@ button { font: inherit; color: inherit; }
 .board.solved .cell::after,
 .board.solved .clue,
 .board.solved .band,
-.board.solved .cursor { opacity: 0; }
+.board.solved .cursor,
+.board.solved .hint { opacity: 0; }
 
 .caption {
   position: absolute;
@@ -475,13 +495,15 @@ dialog.sheet::backdrop { background: var(--scrim); }
 @media (forced-colors: active) {
   :root { --ink: CanvasText; --text: CanvasText; --bg: Canvas; --line: GrayText; --guide: GrayText; --frame: CanvasText; --mark: CanvasText; --done: GrayText; --icon: ButtonText; }
   .board, .eg-cells, .lv svg { forced-color-adjust: none; }
-  .cursor { border-color: Highlight; }
+  .cursor, .hint { border-color: Highlight; }
 }
 
 #settings .sheet-in { padding-top: 46px; }
 #theme-btn { margin-top: 18px; }
 #theme-btn svg { width: 20px; height: 20px; }
 #reset-confirm .sizes { align-items: center; }
+.sheet .sheet-note { margin: 8px 0 0; font-size: calc(12px * var(--zoom)); line-height: 1.4; color: var(--sub); }
+.size-choice[aria-disabled="true"] { opacity: 0.32; cursor: default; }
 .size-choice:hover { background: var(--band); }
 
 /* Quiet rules beside locked clues, independent of completion and conflict ticks. */

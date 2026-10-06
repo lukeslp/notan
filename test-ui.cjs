@@ -429,11 +429,74 @@ const server = http.createServer((req, res) => {
         assert.deepEqual(migrated.solved, { [newId]: time });
         assert.equal(migrated.solved[oldId], undefined);
         assert.equal(migrated.boards[oldId], undefined);
-        assert.equal(migrated.at, newId);
-        assert.equal(await page.evaluate(() => __notan.S.puz.id), newId);
+        // Beetle and Jellyfish players resume on the gentler board now ahead of them.
+        const resumeAt = { 'beetle-angled': 'moth', 'jellyfish-drift': 'lantern' }[newId] || newId;
+        assert.equal(migrated.at, resumeAt);
+        assert.equal(await page.evaluate(() => __notan.S.puz.id), resumeAt);
         assert.equal(await page.evaluate(() => __notan.S.cells.some(Boolean)), false);
         assert.equal(migrated.plusUnlocked, newId === 'robot-wave');
       }
+      // The two steep steps moved (Moth before Beetle; Lantern and Crab before
+      // Jellyfish). A player waiting at either wall resumes once on the first
+      // unsolved board now ahead of it; after that, the saved place holds.
+      for (const [at, solved, want] of [
+        ['beetle-angled', { 'lion-profile': 30 }, 'moth'],
+        ['jellyfish-drift', { lantern: 40 }, 'crab-raised'],
+        ['beetle-angled', { moth: 50 }, 'beetle-angled'],
+      ]) {
+        await page.evaluate(s => sessionStorage.setItem('notan-test-save', JSON.stringify(s)), { at, solved });
+        await page.goto(base);
+        assert.equal(await page.evaluate(() => __notan.S.puz.id), want);
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')).rampOrder), 2);
+      }
+      await page.evaluate(() => sessionStorage.setItem('notan-test-save', JSON.stringify({ at: 'beetle-angled', rampOrder: 2 })));
+      await page.goto(base);
+      assert.equal(await page.evaluate(() => __notan.S.puz.id), 'beetle-angled');
+      assert.equal(await page.locator('#lvl-text').textContent(), '50');
+
+      // Hint from How to play: a wrong square gets a dashed ring and focus, the
+      // level is flagged as hinted, and the next move clears the ring.
+      await page.evaluate(() => sessionStorage.setItem('notan-test-save', JSON.stringify({ at: 'cup', boards: { cup: { c: '111000000', t: 5 } } })));
+      await page.goto(base + '/?level=2');
+      await page.locator('#help-btn').click();
+      await page.locator('#help-hint-btn').click();
+      assert.equal(await page.locator('#help').evaluate(d => d.open), false);
+      assert.deepEqual(await page.evaluate(() => ({ i: __notan.S.hint.i, wrong: __notan.S.hint.wrong })), { i: 1, wrong: true });
+      assert.equal(await page.locator('.hint.on.wrong').isVisible(), true);
+      await page.waitForFunction(() => /row 1, column 2 is wrong/.test(document.querySelector('#live').textContent));
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      assert.equal(await page.evaluate(() => [...document.querySelectorAll('.cell')].indexOf(document.activeElement)), 1);
+      assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')).boards.cup.h), true);
+      await page.keyboard.press('Space');
+      assert.equal(await page.locator('.hint').isVisible(), false);
+      assert.equal(await page.evaluate(() => __notan.S.hint), null);
+      // Hint from Settings on a correct board: a solid ring on a square to fill,
+      // with the clue that settles it outlined.
+      await page.locator('#settings-btn').click();
+      await page.locator('#hint-btn').click();
+      const nextHint = await page.evaluate(() => ({ wrong: !!__notan.S.hint.wrong, fill: __notan.S.puz.sol[__notan.S.hint.i] }));
+      assert.deepEqual(nextHint, { wrong: false, fill: 1 });
+      assert.equal(await page.locator('#grid .clue.hinted').count(), 1);
+      assert.equal(await page.locator('.hint.on:not(.wrong)').isVisible(), true);
+      await page.screenshot({ path: `/tmp/notan-hint-${viewport.width}-${colorScheme}.png` });
+      // The flag survives a reload and a reset; the hinted solve moves on but records nothing.
+      await page.reload();
+      assert.equal(await page.evaluate(() => __notan.S.hinted), true);
+      await resetLevel();
+      await solve();
+      assert.equal(await page.locator('#hint-notice').isVisible(), true);
+      const hintedSave = await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')));
+      assert.equal(hintedSave.solved.cup, undefined);
+      assert.equal(hintedSave.boards.cup, undefined);
+      assert.equal(hintedSave.at, 'plus');
+      // Played again without a hint, it counts.
+      await page.goto(base + '/?level=2');
+      assert.equal(await page.evaluate(() => __notan.S.hinted), false);
+      await solve();
+      assert.equal(await page.locator('#hint-notice').isVisible(), false);
+      assert.equal(typeof await page.evaluate(() => JSON.parse(localStorage.getItem('ink.v1')).solved.cup), 'number');
+      // Hand the New Game+ checks below the unlocked save they expect.
+      await page.evaluate(() => sessionStorage.setItem('notan-test-save', JSON.stringify({ at: 'robot-wave', solved: { 'robot-wave': 125 } })));
       await page.goto(base + '/?plus=1');
       assert.equal(await page.locator('#lvl-text').textContent(), '+1');
       // Locked URL falls back to the saved main level, even with saved + progress.
@@ -494,7 +557,7 @@ const server = http.createServer((req, res) => {
       await page.keyboard.press('Escape');
       await cdp.detach();
       assert.deepEqual(errors, []);
-      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: double-tap/undo, snake paths, guides, strikethrough, all redraw migrations, New Game+ gating/unlock/URLs/reset, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
+      console.log(`PASS ${viewport.width}x${viewport.height} ${colorScheme}: double-tap/undo, snake paths, guides, strikethrough, all redraw migrations, ramp resume, hints, New Game+ gating/unlock/URLs/reset, quick play, leaf, next, keyboard, reset, zoom, theme before paint, background/cell holds, line locks, persistence, undo independence, solved cleanup; no console errors`);
       await context.close();
     }
   } finally { await browser.close(); server.close(); }

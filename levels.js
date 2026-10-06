@@ -1,7 +1,8 @@
 /* Notan: the ramp. Fixed and hand-ordered; test-levels.js checks that every
  * board has exactly one solution, that the line solver finishes it without
  * guessing, and that the measured band never jumps by more than one
- * between neighbors. Pictograms are drawn by hand. Entries with a `seed`
+ * between neighbors (from level 41, the score never climbs more than 2).
+ * Pictograms are drawn by hand. Entries with a `seed`
  * came from engine.generate(seed, size), were picked by eye and named for
  * what they look like; the art is stored so the ramp never shifts.
  * '#' is ink, '.' is paper. */
@@ -70,22 +71,8 @@
       '###....#####',
       '############',
     ] },
-    // A swimming bell with tentacles trailing to the left.
-    { id: 'jellyfish-drift', name: 'Jellyfish', art: [
-      '......###...',
-      '....#######.',
-      '...#########',
-      '...#########',
-      '....########',
-      '..#########.',
-      '..##.##.##..',
-      '.##.##.##...',
-      '.##..##.##..',
-      '##..##...##.',
-      '#...##....#.',
-      '....#.......',
-    ] },
-    // Breather after Jellyfish: depth 7 -> 5.
+    // Lantern and Crab come before Jellyfish, so depth climbs 4, 5, 6, 7 from Ridge.
+    // Jellyfish straight after Ridge (4 -> 7) stopped players in October 2026.
     { id: 'lantern', name: 'Lantern', seed: 99, art: ['..########..', '...######...', '...######...', '...######...', '...######...', '..########..', '..###..###..', '.##########.', '..########..', '....####....', '#..........#', '#..........#'] },
     // One oversized claw raised above the body.
     { id: 'crab-raised', name: 'Crab', art: [
@@ -102,7 +89,22 @@
       '#...#..#...#',
       '...##..##...',
     ] },
-    // Fifteen across. Pine is a breather after Crab: depth 6 -> 5.
+    // A swimming bell with tentacles trailing to the left.
+    { id: 'jellyfish-drift', name: 'Jellyfish', art: [
+      '......###...',
+      '....#######.',
+      '...#########',
+      '...#########',
+      '....########',
+      '..#########.',
+      '..##.##.##..',
+      '.##.##.##...',
+      '.##..##.##..',
+      '##..##...##.',
+      '#...##....#.',
+      '....#.......',
+    ] },
+    // Fifteen across. Pine is a breather after Jellyfish: depth 7 -> 5.
     { id: 'pine', name: 'Pine', art: ['.......#.......', '......###......', '.....#####.....', '....#######....', '......###......', '.....#####.....', '....#######....', '...#########...', '.....#####.....', '....#######....', '...#########...', '..###########..', '.#############.', '......###......', '......###......'] },
     // A side view with a heavy mane, muzzle, and tufted tail.
     { id: 'lion-profile', name: 'Lion', art: [
@@ -122,6 +124,9 @@
       '...###....###..',
       '...............',
     ] },
+    // Moth before Beetle, so depth climbs 5, 7, 8 from Lion. Beetle straight
+    // after Lion was the steepest step in the ramp and stopped most players.
+    { id: 'moth', name: 'Moth', seed: 20, art: ['...##..#..##...', '...##..#..##...', '..###########..', '...#########...', '...#########...', '....#######....', '.....#####.....', '#....#####....#', '####...#...####', '#####.....#####', '#####.....#####', '######...######', '#####.....#####', '.######.######.', '..###########..'] },
     // Climbing diagonally, with a seam between its wing cases.
     { id: 'beetle-angled', name: 'Beetle', art: [
       '..........#....',
@@ -140,8 +145,6 @@
       '.##..##....#...',
       '.#...#.........',
     ] },
-    // Breather after Beetle: depth 8 -> 7.
-    { id: 'moth', name: 'Moth', seed: 20, art: ['...##..#..##...', '...##..#..##...', '..###########..', '...#########...', '...#########...', '....#######....', '.....#####.....', '#....#####....#', '####...#...####', '#####.....#####', '#####.....#####', '######...######', '#####.....#####', '.######.######.', '..###########..'] },
     // A tilted head beneath a bent antenna.
     { id: 'alien-antenna', name: 'Alien', art: [
       '...###.........',

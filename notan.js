@@ -50,6 +50,15 @@
     delete save.boards[oldId];
     if (save.at === oldId) save.at = newId;
   }
+  // 2026-10-06: Moth now comes before Beetle, and Lantern and Crab before
+  // Jellyfish, to soften the two steepest steps in the ramp. A player who was
+  // waiting at one of those walls comes back on the gentler board ahead of it.
+  if (raw.rampOrder !== 2) {
+    const ahead = { 'beetle-angled': ['moth'], 'jellyfish-drift': ['lantern', 'crab-raised'] }[save.at];
+    const first = ahead && ahead.find((id) => typeof save.solved[id] !== 'number');
+    if (first) save.at = first;
+  }
+  save.rampOrder = 2;
   save.plusUnlocked = raw.plusUnlocked === true || typeof save.solved[LEVELS[LEVELS.length - 1].id] === 'number';
   function persist() {
     try { localStorage.setItem(KEY, JSON.stringify(save)); } catch (e) { /* storage blocked: play on */ }
@@ -74,19 +83,19 @@
 
   /* ---------- state + elements ---------- */
   const S = {
-    puz: null, cells: null, undo: [], locks: { row: [], col: [] }, solved: false, solvedAt: 0,
+    puz: null, cells: null, undo: [], locks: { row: [], col: [] }, solved: false, solvedAt: 0, hinted: false, hint: null,
     time: 0, focus: 0, mark: save.mark, drag: null, pending: null,
     lastTap: null, kbd: false, geo: null, lastTo: null,
   };
   const board = $('#board'), grid = $('#grid'), bandR = $('.band-r'), bandC = $('.band-c');
-  const cursor = $('.cursor'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
+  const cursor = $('.cursor'), hintEl = $('.hint'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
   const lvlBtn = $('#lvl-btn'), lvlText = $('#lvl-text'), clock = $('#clock'), live = $('#live');
   const undoBtn = $('#undo-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
   const shareBtn = $('#share-btn');
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
-  const resetConfirm = $('#reset-confirm');
-  const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice');
+  const resetConfirm = $('#reset-confirm'), hintBtns = document.querySelectorAll('.hint-action');
+  const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice'), hintNotice = $('#hint-notice');
   const dialogs = [help, levels, settings, resetConfirm];
   const modalOpen = () => dialogs.some((dlg) => dlg.open);
   let cellEls = [], rowHeads = [], colHeads = [];
@@ -136,12 +145,15 @@
     const n = puz.w * puz.h;
     S.cells = new Int8Array(n);
     S.time = 0;
+    S.hinted = false;
+    clearHint();
     const saved = puz.endless
       ? (save.endless && save.endless.size === puz.size && save.endless.seed === puz.seed ? save.endless : null)
       : save.boards[puz.id];
     if (saved && typeof saved.c === 'string' && saved.c.length === n) {
       for (let i = 0; i < n; i++) { const v = saved.c.charCodeAt(i) - 48; S.cells[i] = v === 1 || v === 2 ? v : 0; }
       S.time = Math.max(0, saved.t | 0);
+      S.hinted = saved.h === true;
       for (const kind of ['row', 'col']) {
         const locks = saved.locks && saved.locks[kind];
         S.locks[kind] = S.locks[kind].map((_, i) => Array.isArray(locks) && locks[i] === true);
@@ -150,7 +162,7 @@
     if (puz.endless) {
       save.quickSize = puz.size;
       save.at = 'endless';
-      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks };
+      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks, h: S.hinted || undefined };
     } else save.at = puz.id;
     persist();
     renderQuickChoices();
@@ -261,6 +273,7 @@
     caption.style.top = Math.round(ty + ph + 14) + 'px';
     showBands(S.bandAt == null ? -1 : S.bandAt);
     placeCursor();
+    placeHint();
   }
 
   /* ---------- rendering ---------- */
@@ -338,6 +351,7 @@
     lvlBtn.setAttribute('aria-label', (p.endless ? 'Endless, ' + p.size + ' by ' + p.size : label(p) + ' of ' + sequence(p).length) + '. Choose a level');
     clock.textContent = fmt(S.time);
     undoBtn.setAttribute('aria-disabled', S.undo.length && !S.solved ? 'false' : 'true');
+    hintBtns.forEach((b) => b.setAttribute('aria-disabled', S.solved ? 'true' : 'false'));
     modeBtn.setAttribute('aria-pressed', S.mark ? 'true' : 'false');
     modeBtn.querySelector('.m-fill').style.display = S.mark ? 'none' : '';
     modeBtn.querySelector('.m-dot').style.display = S.mark ? '' : 'none';
@@ -361,9 +375,10 @@
     if (!S.puz || S.solved) return;
     const c = Array.from(S.cells).join('');
     const blank = !S.cells.some((v) => v);
-    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks };
-    else if (blank && !S.time && !S.locks.row.some(Boolean) && !S.locks.col.some(Boolean)) delete save.boards[S.puz.id];
-    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks };
+    const h = S.hinted || undefined;
+    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks, h };
+    else if (blank && !S.time && !S.hinted && !S.locks.row.some(Boolean) && !S.locks.col.some(Boolean)) delete save.boards[S.puz.id];
+    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks, h };
     persist();
   }
 
@@ -393,6 +408,7 @@
     if (S.undo.length > 400) S.undo.shift();
   }
   function afterChange(idx, speak) {
+    clearHint();
     const done = updateLines(idx);
     storeBoard();
     hud();
@@ -494,6 +510,7 @@
     if (S.solved) return;
     const snap = S.undo.pop();
     if (!snap) { announce('Nothing to undo'); return; }
+    clearHint();
     const diff = [];
     for (let i = 0; i < snap.length; i++) if (S.cells[i] !== snap[i]) diff.push(i);
     S.cells = snap;
@@ -507,6 +524,7 @@
     clearTimeout(finishTimer);
     S.lastTap = null;
     if (S.solved) { open(S.puz); announce(label(S.puz) + ' again'); return; }
+    clearHint();
     const hadLocks = S.locks.row.some(Boolean) || S.locks.col.some(Boolean);
     S.locks.row.fill(false); S.locks.col.fill(false);
     if (!S.cells.some((v) => v) && !hadLocks) { announce('The board is already blank'); return; }
@@ -518,8 +536,74 @@
     announce('Board cleared. Undo brings it back.');
   }
 
+  /* ---------- hint ---------- */
+  /* A last resort, kept in Settings and How to play; a level solved with one
+   * does not count. It rings one wrong square if there is one, the most
+   * recently changed first. Otherwise it rings a square the board already
+   * settles and the clue that settles it, preferring a square to fill:
+   * empty squares never have to be marked, so "leave this empty" helps less.
+   * Every board can be finished line by line, so a correct board always has one. */
+  function findHint() {
+    const { w, h, sol, rows, cols } = S.puz;
+    const wrong = (i) => (S.cells[i] === INK && sol[i] !== 1) || (S.cells[i] === MARK && sol[i] === 1);
+    for (let k = S.undo.length - 1; k >= 0; k--) {
+      const snap = S.undo[k];
+      for (let i = 0; i < snap.length; i++) if (snap[i] !== S.cells[i] && wrong(i)) return { i, wrong: true };
+    }
+    for (let i = 0; i < S.cells.length; i++) if (wrong(i)) return { i, wrong: true };
+    const known = Array.from(S.cells, (v) => (v === INK ? 1 : v === MARK ? 0 : -1));
+    let best = null;
+    const consider = (kind, k, idx) => {
+      const line = idx.map((i) => known[i]);
+      if (!line.includes(-1)) return;
+      const res = E.solveLine(line, kind === 'row' ? rows[k] : cols[k]);
+      if (!res) return;
+      const fill = [], empty = [];
+      idx.forEach((i, n) => { if (line[n] === -1 && res[n] !== -1) (res[n] === 1 ? fill : empty).push(i); });
+      const weight = fill.length * 100 + empty.length;
+      if (weight && (!best || weight > best.weight)) best = { weight, kind, k, i: fill.length ? fill[0] : empty[0] };
+    };
+    for (let r = 0; r < h; r++) consider('row', r, Array.from({ length: w }, (_, c) => r * w + c));
+    for (let c = 0; c < w; c++) consider('col', c, Array.from({ length: h }, (_, r) => r * w + c));
+    return best;
+  }
+  function placeHint() {
+    if (!S.hint || !S.geo) return;
+    const g = S.geo, w = S.puz.w;
+    hintEl.style.left = g.cw + (S.hint.i % w) * g.cell + 'px';
+    hintEl.style.top = g.ch + Math.floor(S.hint.i / w) * g.cell + 'px';
+  }
+  function clearHint() {
+    if (!S.hint) return;
+    S.hint = null;
+    hintEl.classList.remove('on', 'wrong');
+    grid.querySelectorAll('.clue.hinted').forEach((n) => n.classList.remove('hinted'));
+  }
+  function showHint() {
+    if (!S.puz || S.solved) return;
+    const hint = findHint();
+    if (!hint) { announce('No hint: every square is already settled'); return; }
+    clearHint();
+    clearNudge();
+    S.hint = hint;
+    S.hinted = true;
+    storeBoard();
+    if (hint.kind) (hint.kind === 'row' ? rowHeads : colHeads)[hint.k].classList.add('hinted');
+    hintEl.classList.toggle('wrong', !!hint.wrong);
+    placeHint();
+    void hintEl.offsetWidth;
+    hintEl.classList.add('on');
+    setFocus(hint.i, true);
+    const w = S.puz.w, r = Math.floor(hint.i / w) + 1, c = hint.i % w + 1;
+    announce(hint.wrong
+      ? 'Hint: row ' + r + ', column ' + c + ' is wrong' + (isLocked(hint.i) ? ', and its line is locked' : '') + '.'
+      : hint.kind === 'row' ? 'Hint: row ' + r + ' settles the square in column ' + c + '.'
+        : 'Hint: column ' + c + ' settles the square in row ' + r + '.');
+  }
+
   /* ---------- solved ---------- */
   function finish(quiet) {
+    clearHint();
     S.solved = true;
     S.locks.row.fill(false); S.locks.col.fill(false);
     renderAll();
@@ -529,11 +613,15 @@
     if (p.endless) {
       save.endless = { size: p.size, seed: newSeed(), c: '', t: 0 };
     } else {
-      const best = save.solved[p.id];
-      save.solved[p.id] = typeof best === 'number' && best > 0 && best < S.time ? best : S.time;
+      // A hinted solve moves the player on but records nothing: no time, no
+      // tick in Levels, no New Game+. Playing it again without a hint counts.
+      if (!S.hinted) {
+        const best = save.solved[p.id];
+        save.solved[p.id] = typeof best === 'number' && best > 0 && best < S.time ? best : S.time;
+        if (!p.plus && p.index === RAMP.length - 1) save.plusUnlocked = true;
+      }
       delete save.boards[p.id];
-      if (!p.plus && p.index === RAMP.length - 1) save.plusUnlocked = true;
-      const nx = sequence(p)[p.index + 1] || (!p.plus ? PLUS[0] : null);
+      const nx = sequence(p)[p.index + 1] || (!p.plus && save.plusUnlocked ? PLUS[0] : null);
       save.at = nx ? nx.id : p.id;
     }
     persist();
@@ -541,15 +629,16 @@
     placeCursor();
     board.classList.add('solved');
     capName.textContent = p.name;
-    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1;
+    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1 || S.hinted;
+    hintNotice.hidden = p.endless || !S.hinted;
     shareBtn.hidden = !p.endless;
     shareBtn.textContent = 'Share blank';
-    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
+    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 && save.plusUnlocked ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
     caption.hidden = false;
     layout();
     requestAnimationFrame(() => requestAnimationFrame(() => caption.classList.add('show')));
     hud();
-    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
+    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. ' + (!hintNotice.hidden ? 'A hint was used, so it does not count. ' : '') + 'Press Enter for the next one.');
     // Keyboard players land on Next; pointer players just tap anywhere.
     if (S.kbd) nextBtn.focus({ preventScroll: true });
   }
@@ -843,6 +932,11 @@
   });
 
   $('#reset-level').addEventListener('click', () => { startOver(); settings.close(); });
+  hintBtns.forEach((b) => b.addEventListener('click', () => {
+    if (b.getAttribute('aria-disabled') === 'true') return;
+    b.closest('dialog').close();
+    showHint();
+  }));
   $('#reset-all').addEventListener('click', () => showSheet(resetConfirm, $('#reset-all')));
   $('#confirm-reset').addEventListener('click', () => {
     save.solved = {}; save.boards = {}; save.endless = null; save.at = null; save.plusUnlocked = false;

@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css?v=4e79ec0b">
+<link rel="stylesheet" href="./notan.css?v=c8936440">
 </head>
 <body>
 <main id="app">
@@ -50,6 +50,7 @@ try {
     <div class="band band-r" aria-hidden="true"></div>
     <div class="band band-c" aria-hidden="true"></div>
     <div class="cursor" aria-hidden="true"></div>
+    <div class="hint" aria-hidden="true"></div>
     <div class="grid" id="grid" role="grid" aria-describedby="grid-keys"></div>
   </div>
   <p id="grid-keys" class="sr-only">Arrow keys move. Space fills a square, X marks it empty, Delete clears it, Z undoes. Hold Shift with an arrow to paint. L locks or unlocks the row; Shift+L the column.</p>
@@ -57,6 +58,7 @@ try {
   <div class="caption" id="caption" hidden>
     <p id="cap-name"></p>
     <p id="unlock-notice" hidden>New Game+ unlocked</p>
+    <p id="hint-notice" hidden>Hint used, so this one doesn’t count</p>
     <button type="button" class="ib" id="next-btn" aria-label="Next level">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
     </button>
@@ -117,8 +119,13 @@ try {
       <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
       <li><b>L</b> locks or unlocks the focused square’s row; <b>Shift+L</b> its column.</li>
       <li>Bottom left: undo and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
-      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Zoom, the light or dark theme, and Reset. To start over, choose Settings → Reset → Level. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
+      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Hint, Zoom, the light or dark theme, and Reset. To start over, choose Settings → Reset → Level. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
     </ul>
+    <h3 id="help-hint-title">Stuck?</h3>
+    <div class="sizes" role="group" aria-labelledby="help-hint-title" aria-describedby="help-hint-note">
+      <button type="button" class="size-choice hint-action" id="help-hint-btn" aria-label="Show a hint">Hint</button>
+    </div>
+    <p class="sheet-note" id="help-hint-note">A dashed ring marks a wrong square. A solid ring marks a square you can work out from the outlined numbers. A level solved with a hint doesn’t count.</p>
     <div class="sheet-foot">
       <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
     </div>
@@ -143,6 +150,11 @@ try {
     <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
     <h3 id="settings-quick-title">Quick play</h3>
     <div class="sizes" id="settings-sizes" role="group" aria-labelledby="settings-quick-title"></div>
+    <h3 id="hint-title">Hint</h3>
+    <div class="sizes" role="group" aria-labelledby="hint-title" aria-describedby="hint-note">
+      <button type="button" class="size-choice hint-action" id="hint-btn" aria-label="Show a hint">Show</button>
+    </div>
+    <p class="sheet-note" id="hint-note">Rings one square. A level solved with a hint doesn’t count.</p>
     <h3 id="reset-title">Reset</h3>
     <div class="sizes" role="group" aria-labelledby="reset-title">
       <button type="button" class="size-choice" id="reset-level">Level</button>
@@ -170,9 +182,9 @@ try {
 </dialog>
 
 <script src="./engine.js?v=edf79bce"></script>
-<script src="./levels.js?v=3901ac71"></script>
+<script src="./levels.js?v=4e9118b8"></script>
 <script src="./plus-levels.js?v=4f48e40f"></script>
-<script src="./notan.js?v=60d9083f"></script>
+<script src="./notan.js?v=72c02f9e"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>
 </html>

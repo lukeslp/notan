@@ -3,7 +3,8 @@
  *    propagate count) and the line solver finishes it without guessing.
  * 2. The ramp eases in: level 1 is a tiny board whose every line is all or
  *    nothing, it ends on 15x15, and the measured band never moves by more
- *    than one between neighbors. Levels 41–53 have at most three
+ *    than one between neighbors. From level 41 the score never climbs more
+ *    than 2 between neighbors. Levels 41–53 have at most three
  *    mirror-symmetric pictures, spaced out as breathers.
  * 3. The endless generator only yields unique, line-solvable boards, and
  *    the same seed always gives the same board. */
@@ -52,6 +53,12 @@ for (let i = 1; i < measured.length; i++) {
 }
 const bands = measured.map((x) => x.m.band);
 console.log('bands: ' + bands.join(' '));
+// Bands are two score points wide, so a +2.8 step hid inside one band move:
+// Lion -> Beetle and Ridge -> Jellyfish stopped most players in October 2026.
+for (let i = 40; i < measured.length; i++) {
+  const a = measured[i - 1], b = measured[i];
+  if (b.m.score - a.m.score > 2) bad(`score climbs ${a.m.score} -> ${b.m.score} between ${a.L.name} and ${b.L.name} (at most 2 from level 41)`);
+}
 
 // Big pictures should reward solving the whole board. A mirror across either
 // axis counts once, even if a picture has both left-right and top-bottom symmetry.
