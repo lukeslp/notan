@@ -359,152 +359,82 @@ button { font: inherit; color: inherit; }
   .ib:hover:not([aria-disabled="true"]) { background: var(--band); }
 }
 
-/* ---------- sheets ---------- */
+
+/* Sheets: the header stays put; only the content scrolls. */
 dialog.sheet {
-  width: min(calc(23rem * var(--zoom)), calc(100vw - 32px));
-  max-height: calc(100dvh - 32px);
-  padding: 0;
-  border: 1px solid var(--frame);
-  border-radius: 0;
-  background: var(--bg);
-  color: var(--text);
-  overflow: auto;
+  width:min(calc(32rem * var(--zoom)),calc(100vw - 16px));
+  max-width:none; max-height:calc(100dvh - 16px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  height:fit-content; padding:0; margin:auto; border:1px solid var(--frame);
+  border-radius:0; background:var(--bg); color:var(--text); overflow:hidden;
 }
-dialog.sheet::backdrop { background: var(--scrim); }
-.sheet-in {
-  position: relative;
-  padding: 22px 22px 20px;
-  font: 400 calc(14px * var(--zoom))/1.55 var(--sans);
+dialog.sheet[open] { display:block; }
+dialog.sheet::backdrop { background:var(--scrim); }
+.sheet-in { max-height:calc(100dvh - 18px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); display:flex; flex-direction:column; min-height:0; width:100%; font:400 calc(16px * var(--zoom))/1.45 var(--sans); }
+.sheet-head { display:flex; flex:none; align-items:center; justify-content:space-between; gap:12px; padding:8px 16px; border-bottom:1px solid var(--line); }
+.sheet-head form { margin:0; }
+.sheet h2 { margin:0; font:500 calc(16px * var(--zoom))/1.3 var(--mono); }
+.sheet-x { display:grid; place-items:center; width:44px; height:44px; padding:0; border:0; background:none; color:var(--text); cursor:pointer; }
+.sheet-x svg { width:24px; height:24px; }
+.sheet-body { min-height:0; overflow:auto; overscroll-behavior:contain; padding:20px 24px; scroll-padding:12px; }
+.sheet p { margin:0 0 16px; }
+.sheet h3 { margin:0 0 8px; font:500 1em/1.4 var(--sans); }
+.sheet section + section { border-top:1px solid var(--line); margin-top:20px; padding-top:20px; }
+.sheet .sizes { display:flex; flex-wrap:wrap; gap:4px; }
+.text-action,.size-choice,.lv {
+  appearance:none; min-width:44px; min-height:44px; padding:8px 12px; border:1px solid var(--line); border-radius:0;
+  background:none; color:var(--text); font:500 calc(16px * var(--zoom))/1.3 var(--mono); cursor:pointer; touch-action:manipulation;
 }
-.sheet h2 {
-  margin: 0 0 14px;
-  font: 500 calc(12px * var(--zoom))/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--sub);
-}
-.sheet h3 {
-  margin: 18px 0 10px;
-  font: 500 calc(12px * var(--zoom))/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--sub);
-}
-.sheet p { margin: 0 0 12px; }
-.sheet h2:focus { outline: none; }
-.sheet-x {
-  position: absolute;
-  top: 6px; right: 6px;
-  width: 44px; height: 44px;
-  display: grid; place-items: center;
-  padding: 0; border: 0; border-radius: 0;
-  background: none;
-  color: var(--icon);
-  cursor: pointer;
-}
-.sheet-x svg { width: 20px; height: 20px; }
-
-.eg { list-style: none; margin: 0 0 14px; padding: 0; display: grid; gap: 10px; }
-.eg li { display: grid; grid-template-columns: auto 1fr; gap: 12px; align-items: center; }
-.eg-row { display: flex; align-items: center; gap: 8px; }
-.eg-clue { font: 500 calc(13px * var(--zoom))/1 var(--mono); min-width: 2.4em; text-align: right; }
-.eg-cells { display: flex; border: 1px solid var(--frame); }
-.eg-cells i { width: 16px; height: 16px; border-right: 1px solid var(--line); position: relative; }
-.eg-cells i:last-child { border-right: 0; }
-.eg-cells i.on { background: var(--ink); border-right-color: var(--ink); }
-/* The "4" example: bars above and below mark the run's two possible places. */
-.eg-cells.span4 { position: relative; margin: 6px 0; }
-.eg-cells.span4::before, .eg-cells.span4::after { content: ""; position: absolute; height: 2px; width: 64px; background: var(--sub); }
-.eg-cells.span4::before { top: -6px; left: -1px; }
-.eg-cells.span4::after { bottom: -6px; right: -1px; }
-.eg-cells i.q::after {
-  content: ""; position: absolute; left: 50%; top: 50%;
-  width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--mark);
-}
-.eg-note { font-size: calc(13px * var(--zoom)); line-height: 1.4; color: var(--sub); }
-
-.keys { list-style: none; margin: 0 0 16px; padding: 0; font-size: calc(13px * var(--zoom)); color: var(--sub); }
-.keys li { padding: 3px 0; }
-.keys b { font: 500 calc(12px * var(--zoom)) var(--mono); color: var(--text); }
-
-.text-action, .size-choice {
-  appearance: none;
-  min-height: 44px;
-  padding: 0 16px;
-  border: 1px solid var(--frame);
-  border-radius: 0;
-  background: none;
-  color: var(--text);
-  font: 500 calc(13px * var(--zoom))/1 var(--mono);
-  cursor: pointer;
-  touch-action: manipulation;
-}
-.primary-action { margin-bottom: 18px; }
-.size-choice { flex: none; width: max(44px, calc(42px * var(--zoom))); height: max(44px, calc(42px * var(--zoom))); padding: 0; border-color: transparent; color: var(--sub); }
-.size-choice[aria-pressed="true"] { border-color: var(--frame); color: var(--ink); }
-.quick-row { display: flex; align-items: center; gap: 8px; margin-top: 6px; color: var(--sub); font: 500 calc(12px * var(--zoom))/1 var(--mono); }
-#settings-btn svg { width: 20px; height: 20px; }
-
-/* quiet footer of the ? sheet: erase progress, and home */
-.sheet-foot { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 16px; margin-top: 20px; padding-top: 8px; border-top: 1px solid var(--frame); }
-.foot-btn { appearance: none; background: none; border: 0; padding: 0; min-height: 44px; display: inline-flex; align-items: center; color: var(--sub); font: 400 calc(12px * var(--zoom))/1.2 var(--mono); letter-spacing: 0.03em; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
-.foot-btn[data-armed="true"] { color: var(--text); font-weight: 500; }
-.foot-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
-
-.lv-grid {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(44px, 1fr));
-  gap: 6px;
-}
-.lv {
-  appearance: none;
-  width: 100%;
-  min-height: 44px;
-  display: grid;
-  place-items: center;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
-  background: none;
-  color: var(--sub);
-  font: 500 calc(13px * var(--zoom))/1 var(--mono);
-  cursor: pointer;
-}
-.lv.done { color: var(--ink); }
-.lv[aria-current="true"] { text-decoration: underline; text-underline-offset: 6px; color: var(--text); }
-.sizes { display: flex; flex-wrap: wrap; gap: 6px; }
-.sheet h2 { padding-right: 32px; line-height: 1.5; }
-@media (max-width: 48em) {
-  dialog.sheet { width: 100%; height: 100dvh; max-width: none; max-height: none; margin: 0; border: 0; }
-  .sheet-in { padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left)); }
-  .sheet-x { top: max(10px, env(safe-area-inset-top)); right: max(10px, env(safe-area-inset-right)); }
-}
-@media (max-width: 22em) {
-  .quick-row { gap: 4px; font-size: 11px; }
-  .quick-row .sizes { gap: 0; }
-  .eg li { grid-template-columns: 1fr; gap: 6px; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; animation: none !important; }
-  .cell.nudge::before { transform: scale(0.62); opacity: 0.2; }
-}
-@media (forced-colors: active) {
-  :root { --ink: CanvasText; --text: CanvasText; --bg: Canvas; --line: GrayText; --guide: GrayText; --frame: CanvasText; --mark: CanvasText; --done: GrayText; --icon: ButtonText; }
-  .board, .eg-cells, .lv svg { forced-color-adjust: none; }
-  .cursor, .hint { border-color: Highlight; }
-}
-
-#settings .sheet-in { padding-top: 46px; }
-#theme-btn { margin-top: 18px; }
-#theme-btn svg { width: 20px; height: 20px; }
-#reset-confirm .sizes { align-items: center; }
-.sheet .sheet-note { margin: 8px 0 0; font-size: calc(12px * var(--zoom)); line-height: 1.4; color: var(--sub); }
-.size-choice[aria-disabled="true"] { opacity: 0.32; cursor: default; }
-.size-choice:hover { background: var(--band); }
+.size-choice { padding:8px; border-color:transparent; color:var(--sub); }
+.size-choice[aria-pressed="true"],.text-action[aria-pressed="true"] { border-color:var(--frame); color:var(--ink); }
+.text-action:disabled { opacity:.45; cursor:default; }
+.text-action[aria-disabled="true"] { color:var(--sub); cursor:default; }
+.text-action:hover,.size-choice:hover,.lv:hover { background:var(--band); }
+.sheet :is(button,a,summary,[role="gridcell"]):focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
+.wide-action { margin-top:12px; }
+.setting-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; margin-top:8px; }
+#theme-btn { display:flex; align-items:center; gap:8px; }
+#theme-btn svg { width:20px; height:20px; flex:none; }
+.practice-tools { display:flex; flex-wrap:wrap; justify-content:center; gap:8px; }
+.practice-tools form { margin:0; }
+.sheet-foot { border-top:1px solid var(--line); padding-top:12px; margin-top:20px; }
+.foot-btn { display:inline-flex; align-items:center; min-height:44px; font:400 16px/1.4 var(--sans); color:var(--sub); text-underline-offset:3px; background:none; border:0; cursor:pointer; }
+.lv-grid { list-style:none; margin:0 0 20px; padding:0; display:grid; grid-template-columns:repeat(auto-fill,minmax(max(44px,calc(40px * var(--zoom))),1fr)); gap:4px; }
+.lv { width:100%; padding:8px 0; border-color:transparent; color:var(--sub); }
+.lv.done { color:var(--ink); }
+.lv[aria-current="true"] { border-color:var(--frame); }
+.lesson { padding-top:4px; }
+.lesson-heading { display:flex; justify-content:space-between; align-items:baseline; gap:12px; }
+#lesson-count { color:var(--sub); white-space:nowrap; }
+/* The clue sits in the left margin, as row clues do on the board, so the strip stays centered over its tools. */
+.practice-line { display:grid; grid-template-columns:1fr min(calc(100% - 5em),calc(280px * var(--zoom))) 1fr; justify-content:center; align-items:center; column-gap:12px; row-gap:8px; margin:20px 0 12px; }
+#practice-clue { grid-column:1; justify-self:end; font:500 calc(20px * var(--zoom))/1.3 var(--mono); text-align:right; white-space:nowrap; }
+#practice { grid-column:2; width:100%; touch-action:none; user-select:none; }
+#practice-reset[hidden] { display:none; }
+#practice-row { display:grid; grid-template-columns:repeat(5,1fr); }
+.practice-cell { aspect-ratio:1; min-width:44px; min-height:44px; padding:0; border:1px solid var(--guide); border-right:0; position:relative; background:var(--bg); touch-action:none; }
+.practice-cell:last-child { border-right:1px solid var(--guide); }
+.practice-cell.ink { background:var(--ink); }
+.practice-cell.mark::after { content:""; position:absolute; width:14%; height:14%; top:43%; left:43%; border-radius:50%; background:var(--mark); }
+.practice-key { display:flex; flex-wrap:wrap; justify-content:center; gap:8px 16px; font-size:16px; color:var(--sub); }
+.practice-key span { display:inline-flex; align-items:center; gap:6px; }
+.practice-key i { display:inline-block; width:16px; height:16px; border:1px solid var(--guide); position:relative; }
+.practice-key .filled { background:var(--ink); }
+.practice-key .empty::after { content:""; position:absolute; width:4px; height:4px; border-radius:50%; background:var(--mark); top:5px; left:5px; }
+#practice-feedback { margin:8px 0 10px; min-height:1.45em; color:var(--sub); text-align:center; }
+.lesson-nav { display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px; }
+#lesson-possibilities { grid-column:2; margin:0; width:100%; }
+#lesson-possibilities:not([hidden]) { display:grid; gap:8px; }
+.possibility { display:grid; grid-template-columns:repeat(5,1fr); height:calc(18px * var(--zoom)); border:1px solid var(--guide); }
+.possibility i { border-right:1px solid var(--guide); }
+.possibility i:last-child { border-right:0; }
+.possibility i.on { background:var(--ink); }
+.rules { border-top:1px solid var(--line); margin-top:20px; }
+.rules summary { min-height:44px; padding:12px 0; cursor:pointer; }
+.rules p { color:var(--sub); margin:0 0 10px; font-size:calc(15px * var(--zoom)); line-height:1.45; }
+.rules b { color:var(--text); font-weight:500; }
+@media(max-width:480px) { .sheet-body { padding:16px; } .sheet-head { padding:8px 12px; } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } .cell.nudge::before { opacity:.2; transform:scale(.62); } }
+@media(forced-colors:active) { :root { --ink:CanvasText; --text:CanvasText; --bg:Canvas; --line:GrayText; --guide:GrayText; --frame:CanvasText; --mark:CanvasText; --done:GrayText; --icon:ButtonText; } .board,.practice-cell,.possibility { forced-color-adjust:none; } .cursor,.hint { border-color:Highlight; } }
 
 /* Quiet rules beside locked clues, independent of completion and conflict ticks. */
 .clue.locked::before, .eg-clue.locked::before { content: ""; position: absolute; background: var(--sub); }
@@ -514,3 +444,16 @@ dialog.sheet::backdrop { background: var(--scrim); }
 .eg-clue.locked::before { width: 2px; right: -5px; top: 0; bottom: 0; }
 
 #mode-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
+/* Controls, at a glance (Luke, 2026-10-06: "don't need much more text whatsoever"). */
+.controls { margin:16px 0 0; padding-top:12px; border-top:1px solid var(--line); display:grid; gap:6px; }
+.controls div { display:flex; flex-wrap:wrap; gap:0 8px; }
+.controls dt { color:var(--text); }
+.controls dt::after { content:" \2014"; color:var(--sub); }
+.controls dd { margin:0; color:var(--sub); }
+
+/* The possibility bars keep their space in every lesson, so the sheet never changes height. */
+#lesson-possibilities { display: grid !important; }
+#lesson-possibilities.is-off { visibility: hidden; }
+
+/* Lesson tasks reserve two lines, so a one-line task does not shrink the sheet. */
+#lesson-task { min-height: 2lh; }

@@ -222,7 +222,7 @@
     const g = new Uint8Array(w * h);
     const dens = 0.48 + rng() * 0.16;
     for (let i = 0; i < w * h; i++) g[i] = rng() < dens ? 1 : 0;
-    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+    if (sym !== 'none') for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
       const rr = sym === 'quad' ? Math.min(r, h - 1 - r) : r;
       g[r * w + c] = g[rr * w + Math.min(c, w - 1 - c)];
     }
@@ -245,10 +245,60 @@
 
   function density(sol) { let s = 0; for (const v of sol) s += v; return s / sol.length; }
 
-  /* Generate a board that the line solver finishes from blank, which
-   * proves it has exactly one solution. Deterministic in (seed, w, h). */
+  /* Quick-play numbers below 100000 keep the original mirrored boards, so old
+   * share links and a board in progress open unchanged. */
+  const FREE_SEED = 100000;
   function generate(seed, w, h) {
     h = h || w;
+    return seed >= FREE_SEED ? generateFree(seed, w, h) : generateMirrored(seed, w, h);
+  }
+
+  function mirrored(sol, w, h) {
+    let lr = true, ud = true, rot = true, d1 = w === h, d2 = w === h;
+    for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+      const v = sol[r * w + c];
+      if (v !== sol[r * w + (w - 1 - c)]) lr = false;
+      if (v !== sol[(h - 1 - r) * w + c]) ud = false;
+      if (v !== sol[(h - 1 - r) * w + (w - 1 - c)]) rot = false;
+      if (d1 && v !== sol[c * w + r]) d1 = false;
+      if (d2 && v !== sol[(w - 1 - c) * w + (h - 1 - r)]) d2 = false;
+    }
+    return lr || ud || rot || d1 || d2;
+  }
+
+  /* An unmirrored board the line solver finishes from blank. Of a few
+   * candidates it keeps the one that takes the most solver rounds. */
+  function generateFree(seed, w, h) {
+    const rng = mulberry32((seed >>> 0) * 2654435761 + w * 977 + h * 131 + 11);
+    let best = null, found = 0;
+    for (let attempt = 0; attempt < 120 && found < 3; attempt++) {
+      const sol = blob(w, h, rng, 'none');
+      for (let fix = 0; fix < 2 * w * h; fix++) {
+        const d = density(sol);
+        if (d < 0.32 || d > 0.74) break;
+        const { rows, cols } = cluesOf(sol, w, h);
+        const res = propagate(rows, cols, w, h);
+        if (res.solved) {
+          let emptyLines = 0;
+          rows.forEach((x) => { if (!x.length) emptyLines++; });
+          cols.forEach((x) => { if (!x.length) emptyLines++; });
+          if (emptyLines > 1 || mirrored(sol, w, h)) break;
+          found++;
+          const m = measure(rows, cols, w, h);
+          if (!best || m.score > best.score) best = { score: m.score, sol: Uint8Array.from(sol), rows, cols };
+          break;
+        }
+        const open = [];
+        for (let i = 0; i < w * h; i++) if (res.grid[i] === -1) open.push(i);
+        sol[open[Math.floor(rng() * open.length)]] ^= 1;
+      }
+    }
+    return best && { w, h, seed, sol: best.sol, rows: best.rows, cols: best.cols, name: 'No. ' + seed };
+  }
+
+  /* Generate a board that the line solver finishes from blank, which
+   * proves it has exactly one solution. Deterministic in (seed, w, h). */
+  function generateMirrored(seed, w, h) {
     const rng = mulberry32((seed >>> 0) * 2654435761 + w * 977 + h * 131 + 7);
     for (let attempt = 0; attempt < 80; attempt++) {
       const sym = rng() < 0.7 ? 'lr' : 'quad';
@@ -314,7 +364,7 @@
 
   const api = {
     mulberry32, runs, cluesOf, fromArt, toArt, solveLine, propagate, countSolutions,
-    measure, scoreOf, bandOf, generate, density, same, doneClues,
+    measure, scoreOf, bandOf, generate, mirrored, FREE_SEED, density, same, doneClues,
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.InkEngine = api;

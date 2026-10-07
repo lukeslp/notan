@@ -31,6 +31,7 @@
     endless: raw.endless && typeof raw.endless === 'object' ? raw.endless : null,
     seen: !!raw.seen,
     mark: !!raw.mark,
+    gentleCue: raw.gentleCue !== false,
     quickSize: SIZES.includes(raw.quickSize) ? raw.quickSize : 10,
     zoom: [100, 115, 130, 150].includes(raw.zoom) ? raw.zoom : 100,
     theme: ['light', 'dark'].includes(raw.theme) ? raw.theme : 'system',
@@ -73,7 +74,7 @@
   });
   const RAMP = puzzles(LEVELS), PLUS = puzzles(PLUS_LEVELS, true);
   const sequence = (p) => p.plus ? PLUS : RAMP;
-  function newSeed() { return 1 + Math.floor(Math.random() * 99999); }
+  function newSeed() { return E.FREE_SEED + Math.floor(Math.random() * 900000); }
   function endless(size, seed) {
     for (let s = seed, tries = 0; tries < 20; s++, tries++) {
       const g = E.generate(s, size, size);
@@ -112,26 +113,48 @@
   function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   function label(p) { return p.endless ? 'Endless ' + p.size + ' by ' + p.size : (p.plus ? 'New Game+ level ' : 'Level ') + (p.index + 1); }
 
-  /* ---------- open a puzzle ---------- */
-  /* First visit, level 1, nothing touched: after a few quiet seconds one square
-   * shows a faint fill growing and fading, which is what a tap does. No words;
-   * it goes at the first move. */
-  let nudgeTimer = 0;
-  function clearNudge() {
-    clearTimeout(nudgeTimer);
-    nudgeTimer = 0;
-    const n = grid.querySelector('.cell.nudge');
-    if (n) n.classList.remove('nudge');
+
+  /* A single opt-out idle cue per puzzle. The solver must establish a blank
+   * filled square; never pulse an arbitrary first cell or reveal a guess. */
+  let cueTimer=0, cueEnd=0;
+  function clearCue(){
+    clearTimeout(cueTimer);clearTimeout(cueEnd);
+    grid.querySelectorAll('.nudge').forEach(n=>n.classList.remove('nudge'));
   }
-  function scheduleNudge() {
-    clearNudge();
-    const fresh = () => S.puz && S.puz.id === RAMP[0].id && !S.solved && !S.cells.some((v) => v) && !Object.keys(save.solved).length;
-    if (!fresh()) return;
-    nudgeTimer = setTimeout(() => { if (fresh() && !modalOpen() && cellEls[0]) cellEls[0].classList.add('nudge'); }, 3000);
+  function cueCandidate(){
+    const {w,h,sol,rows,cols}=S.puz;
+    if(S.cells.some((v,i)=>(v===INK&&sol[i]!==1)||(v===MARK&&sol[i]===1)))return -1;
+    for(const [count,length,clues,at] of [
+      [h,w,rows,(k,n)=>k*w+n],[w,h,cols,(k,n)=>n*w+k]]) {
+      for(let k=0;k<count;k++){
+        const idx=Array.from({length},(_,n)=>at(k,n));
+        const known=idx.map(i=>S.cells[i]===INK?1:S.cells[i]===MARK?0:-1);
+        const deduced=E.solveLine(known,clues[k]);
+        if(!deduced)continue;
+        const n=idx.findIndex((i,n)=>S.cells[i]===BLANK&&!isLocked(i)&&deduced[n]===1&&sol[i]===1);
+        if(n>=0)return idx[n];
+      }
+    }
+    return -1;
+  }
+  function scheduleCue(){
+    clearCue();
+    if(!save.gentleCue||!S.puz||S.solved||S.cueShown||modalOpen()||document.hidden||S.drag)return;
+    cueTimer=setTimeout(()=>{
+      if(modalOpen()||document.hidden||S.drag||S.solved)return;
+      const i=cueCandidate();if(i<0)return;
+      S.cueShown=true;S.hinted=true;storeBoard();
+      cellEls[i].classList.add('nudge');
+      announce('Gentle cue: row '+(Math.floor(i/S.puz.w)+1)+', column '+(i%S.puz.w+1)+' can be filled from the clues.');
+      cueEnd=setTimeout(()=>cellEls[i]?.classList.remove('nudge'),3200);
+    },10000);
   }
 
+  /* ---------- open a puzzle ---------- */
   function open(puz) {
     if (!puz) return;
+    clearCue();
+    painter.cancel();
     stopClock();
     clearTimeout(finishTimer);
     S.puz = puz;
@@ -147,6 +170,7 @@
     S.cells = new Int8Array(n);
     S.time = 0;
     S.hinted = false;
+    S.cueShown = false;
     clearHint();
     const saved = puz.endless
       ? (save.endless && save.endless.size === puz.size && save.endless.seed === puz.seed ? save.endless : null)
@@ -155,6 +179,7 @@
       for (let i = 0; i < n; i++) { const v = saved.c.charCodeAt(i) - 48; S.cells[i] = v === 1 || v === 2 ? v : 0; }
       S.time = Math.max(0, saved.t | 0);
       S.hinted = saved.h === true;
+      S.cueShown = saved.n === true;
       for (const kind of ['row', 'col']) {
         const locks = saved.locks && saved.locks[kind];
         S.locks[kind] = S.locks[kind].map((_, i) => Array.isArray(locks) && locks[i] === true);
@@ -163,7 +188,7 @@
     if (puz.endless) {
       save.quickSize = puz.size;
       save.at = 'endless';
-      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks, h: S.hinted || undefined };
+      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks, h: S.hinted || undefined, n: S.cueShown || undefined };
     } else save.at = puz.id;
     persist();
     renderQuickChoices();
@@ -185,7 +210,7 @@
     board.classList.remove('instant');
     if (refocus) setFocus(0, true);
     if (isSolved()) finish(true);
-    else scheduleNudge();
+    else scheduleCue();
   }
 
   function build() {
@@ -361,10 +386,10 @@
   /* ---------- clock ---------- */
   let tick = null;
   function startClock() {
-    clearNudge();
+    clearCue();
     if (tick || S.solved) return;
     tick = setInterval(() => {
-      if (document.hidden) return;
+      if (document.hidden || modalOpen()) return;
       S.time++;
       clock.textContent = fmt(S.time);
       if (S.time % 10 === 0) storeBoard();
@@ -377,9 +402,9 @@
     const c = Array.from(S.cells).join('');
     const blank = !S.cells.some((v) => v);
     const h = S.hinted || undefined;
-    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks, h };
+    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks, h, n: S.cueShown || undefined };
     else if (blank && !S.time && !S.hinted && !S.locks.row.some(Boolean) && !S.locks.col.some(Boolean)) delete save.boards[S.puz.id];
-    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks, h };
+    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks, h, n: S.cueShown || undefined };
     persist();
   }
 
@@ -390,7 +415,6 @@
     S.lastTap = null;
     if (S.solved || S.drag || S.pending) return;
     S.locks[kind][k] = !S.locks[kind][k];
-    clearNudge();
     renderAll();
     storeBoard();
     announce((kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + (S.locks[kind][k] ? ', locked' : ', unlocked'));
@@ -410,6 +434,7 @@
   }
   function afterChange(idx, speak) {
     clearHint();
+    scheduleCue();
     const done = updateLines(idx);
     storeBoard();
     hud();
@@ -435,76 +460,6 @@
     afterChange([i], to === BLANK ? 'cleared' : STATE[to]);
   }
 
-  /* One snapshot per path; a second tap revises the first tap's transaction. */
-  function begin(i, kind, e) {
-    if (S.solved || isLocked(i)) return;
-    clearTimeout(finishTimer);
-    const last = S.lastTap;
-    const double = kind === 'tap' && last && last.i === i &&
-      performance.now() - last.time <= DOUBLE_MS && S.undo.at(-1) === last.snap;
-    S.lastTap = null;
-    const before = Int8Array.from(S.cells);
-    const snap = double ? S.undo.pop() : Int8Array.from(S.cells);
-    const from = snap[i];
-    const to = double ? toggleMark(from) : kind === 'alt' ? altOf(from) : tapOf(from);
-    S.drag = { id: e.pointerId, start: i, to, snap, before, double, painted: new Set(),
-      point: pointAt(e), tap: kind === 'tap' && !double, moved: false };
-    startClock();
-    paintCell(i);
-  }
-  function paintCell(i) {
-    const d = S.drag;
-    if (isLocked(i)) return;
-    d.painted.add(i);
-    S.cells[i] = d.to;
-    renderCell(i);
-  }
-  function pointAt(e) {
-    const b = board.getBoundingClientRect(), g = S.geo;
-    return { x: Math.max(0, Math.min(S.puz.w - 0.000001, (e.clientX - b.left - g.cw) / g.cell)),
-      y: Math.max(0, Math.min(S.puz.h - 0.000001, (e.clientY - b.top - g.ch) / g.cell)) };
-  }
-  function paintTo(e) {
-    const d = S.drag;
-    if (!d) return;
-    const a = d.point, b = pointAt(e), ts = [0, 1];
-    // Split the actual pointer segment at grid boundaries. Midpoints visit
-    // every crossed square, even with sparse samples or a diagonal path.
-    for (const axis of ['x', 'y']) {
-      const delta = b[axis] - a[axis];
-      if (!delta) continue;
-      for (let n = Math.floor(Math.min(a[axis], b[axis])) + 1; n < Math.max(a[axis], b[axis]); n++)
-        ts.push((n - a[axis]) / delta);
-    }
-    ts.sort((x, y) => x - y);
-    const visit = t => {
-      const i = Math.floor(a.y + (b.y - a.y) * t) * S.puz.w + Math.floor(a.x + (b.x - a.x) * t);
-      if (i !== d.start) d.moved = true;
-      paintCell(i);
-      return i;
-    };
-    for (let n = 1; n < ts.length; n++) if (ts[n] - ts[n - 1] > 1e-10) visit((ts[n] + ts[n - 1]) / 2);
-    setFocus(visit(1), false);
-    d.point = b;
-    updateLines([...d.painted]);
-  }
-  function endGesture(e) {
-    const d = S.drag;
-    S.drag = null;
-    if (!d || !d.painted.size) return;
-    if (e.type !== 'pointerup') {
-      S.cells = d.before;
-      if (d.double) pushUndo(d.snap);
-      renderAll();
-      storeBoard();
-      return;
-    }
-    pushUndo(d.snap);
-    if (e.type === 'pointerup' && d.tap && !d.moved)
-      S.lastTap = { i: d.start, time: performance.now(), snap: d.snap };
-    afterChange([...d.painted], null);
-  }
-
   function undo() {
     clearTimeout(finishTimer);
     S.lastTap = null;
@@ -515,7 +470,8 @@
     const diff = [];
     for (let i = 0; i < snap.length; i++) if (S.cells[i] !== snap[i]) diff.push(i);
     S.cells = snap;
-    diff.forEach(renderCell);
+    if (snap.locks) S.locks = {row:snap.locks.row.slice(),col:snap.locks.col.slice()};
+    renderAll();
     updateLines(diff);
     storeBoard();
     hud();
@@ -526,10 +482,14 @@
     S.lastTap = null;
     if (S.solved) { open(S.puz); announce(label(S.puz) + ' again'); return; }
     clearHint();
+    painter.cancel();
+    const previousLocks = {row:S.locks.row.slice(),col:S.locks.col.slice()};
     const hadLocks = S.locks.row.some(Boolean) || S.locks.col.some(Boolean);
     S.locks.row.fill(false); S.locks.col.fill(false);
     if (!S.cells.some((v) => v) && !hadLocks) { announce('The board is already blank'); return; }
-    pushUndo(Int8Array.from(S.cells));
+    const snapshot = Int8Array.from(S.cells);
+    snapshot.locks = previousLocks;
+    pushUndo(snapshot);
     S.cells.fill(0);
     renderAll();
     storeBoard();
@@ -581,10 +541,11 @@
   }
   function showHint() {
     if (!S.puz || S.solved) return;
+    clearCue();
+    S.cueShown = true;
     const hint = findHint();
     if (!hint) { announce('No hint: every square is already settled'); return; }
     clearHint();
-    clearNudge();
     S.hint = hint;
     S.hinted = true;
     storeBoard();
@@ -604,6 +565,7 @@
   /* ---------- solved ---------- */
   function finish(quiet) {
     clearHint();
+    clearCue();
     S.solved = true;
     S.locks.row.fill(false); S.locks.col.fill(false);
     renderAll();
@@ -721,51 +683,25 @@
       try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
       return;
     }
-    const i = cellAt(e.clientX, e.clientY);
-    if (i < 0 || isLocked(i) || !e.isPrimary) return;
-    e.preventDefault();
-    S.kbd = false;
-    try { board.setPointerCapture(e.pointerId); } catch (_) { /* fine without capture */ }
-    setFocus(i, false);
-    begin(i, e.button === 2 ? 'alt' : 'tap', e);
-    if (e.pointerType === 'touch' && S.drag && S.drag.tap) {
-      const p = { i, id: e.pointerId, timer: 0 };
-      p.timer = setTimeout(() => {
-        if (S.pending !== p || !S.drag) return;
-        S.pending = null;
-        S.drag.to = altOf(S.drag.snap[i]);
-        S.drag.tap = false;
-        paintCell(i);
-        updateLines([i]);
-        try { navigator.vibrate && navigator.vibrate(12); } catch (_) { /* no haptics */ }
-      }, HOLD_MS);
-      S.pending = p;
-    }
   });
-  board.addEventListener('pointermove', (e) => {
-    if (clueHold && e.pointerId === clueHold.id) {
-      if (Math.hypot(e.clientX - clueHold.x, e.clientY - clueHold.y) >= 10) cancelClueHold();
-      return;
-    }
-    if (S.solved || !S.geo) return;
-    if (S.drag && e.pointerId === S.drag.id) {
-      for (const sample of e.getCoalescedEvents?.().length ? e.getCoalescedEvents() : [e]) paintTo(sample);
-      if (S.pending && S.drag.moved) { clearTimeout(S.pending.timer); S.pending = null; }
-      return;
-    }
-    if (e.pointerType === 'mouse') { const i = cellAt(e.clientX, e.clientY); showBands(i); }
+  const painter = NotanPaint.bind({
+    root: board, state: S,
+    size: () => S.puz,
+    rect: () => { const b=board.getBoundingClientRect(),g=S.geo;
+      return {left:b.left+g.cw,top:b.top+g.ch,width:S.puz.w*g.cell,height:S.puz.h*g.cell}; },
+    accept: e => !S.solved && !!S.geo && !modalOpen() && !clueLine(e.target) && cellAt(e.clientX,e.clientY)>=0,
+    locked: isLocked,
+    render: renderCell, preview: updateLines,
+    focus: i => { S.kbd=false; setFocus(i,true); },
+    start: () => { clearTimeout(finishTimer); startClock(); },
+    commit: idx => afterChange(idx,null),
+    restore: () => { renderAll(); storeBoard(); }
   });
-  function pointerEnd(e) {
-    if (clueHold && e.pointerId === clueHold.id) cancelClueHold();
-    if (S.pending && e.pointerId === S.pending.id) { clearTimeout(S.pending.timer); S.pending = null; }
-    if (S.drag && e.pointerId === S.drag.id) {
-      if (e.type === 'pointerup') paintTo(e);
-      endGesture(e);
-    }
-  }
-  board.addEventListener('pointerup', pointerEnd);
-  board.addEventListener('pointercancel', pointerEnd);
-  board.addEventListener('lostpointercapture', pointerEnd);
+  board.addEventListener('pointermove', e => {
+    if(clueHold && e.pointerId===clueHold.id &&
+      Math.hypot(e.clientX-clueHold.x,e.clientY-clueHold.y)>=10)cancelClueHold();
+    if(e.pointerType==='mouse' && !S.drag && !S.solved)showBands(cellAt(e.clientX,e.clientY));
+  });
   board.addEventListener('pointerleave', (e) => {
     if (e.pointerType === 'mouse' && !S.drag) showBands(grid.contains(document.activeElement) ? S.focus : -1);
   });
@@ -880,7 +816,7 @@
   shareBtn.addEventListener('click', async () => {
     const p = S.puz;
     if (!p.endless) return;
-    const url = 'https://dr.eamer.dev/games/notan/?endless=' + p.size + '&seed=' + p.seed;
+    const url = location.origin + location.pathname + '?endless=' + p.size + '&seed=' + p.seed;
     const text = 'A ' + p.size + '\u00d7' + p.size + ' Notan board. Can you solve it?';
     if (navigator.share) {
       try { await navigator.share({ title: 'Notan', text, url }); return; }
@@ -901,9 +837,13 @@
   /* ---------- sheets ---------- */
   function showSheet(dlg, opener) {
     if (dlg.open) return;
+    painter.cancel();
+    cancelClueHold();
+    clearCue();
     dlg.showModal();
-    dlg.scrollTop = 0;
+    dlg.querySelector('.sheet-body').scrollTop = 0;
     dlg.addEventListener('close', () => {
+      scheduleCue();
       // close() restores native focus synchronously, but this event is queued.
       // Keep any focus chosen since then (by the player or a new board/dialog).
       const active = document.activeElement;
@@ -915,7 +855,7 @@
   function openHelp() { showSheet(help, helpBtn); }
   function openSettings(opener = settingsBtn) {
     showSheet(settings, opener);
-    $('#settings-sizes button[aria-pressed="true"]').focus({ preventScroll: true });
+    settings.querySelector('.sheet-x').focus({ preventScroll: true });
   }
   settingsBtn.addEventListener('click', () => openSettings());
   help.addEventListener('close', () => {
@@ -925,7 +865,7 @@
     dlg.addEventListener('click', (e) => { if (e.target === dlg) dlg.close(); });
     dlg.addEventListener('keydown', (e) => {
       if (e.key !== 'Tab') return;
-      const controls = [...dlg.querySelectorAll('button, a[href]')];
+      const controls = [...dlg.querySelectorAll('button, a[href], summary, [tabindex="0"]')].filter(n => !n.disabled && n.getClientRects().length && getComputedStyle(n).visibility !== 'hidden');
       const first = controls[0], last = controls[controls.length - 1];
       if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
       else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
@@ -958,7 +898,7 @@
       light: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
       dark: '<path d="M20 14A8.5 8.5 0 0 1 10 4a8.5 8.5 0 1 0 10 10Z"/>',
     };
-    $('#theme-btn').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[save.theme] + '</svg>';
+    $('#theme-btn').innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + paths[save.theme] + '</svg><span>' + save.theme[0].toUpperCase() + save.theme.slice(1) + '</span>';
     $('#theme-btn').setAttribute('aria-label', 'Theme: ' + save.theme + '. Switch to ' + nextTheme + '.');
     $('#zoom-sizes').querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(Number(b.textContent) === save.zoom)));
   }
@@ -973,6 +913,14 @@
     save.theme = { system: 'light', light: 'dark', dark: 'system' }[save.theme];
     appearance(); persist();
   });
+  $('#cue-btn').addEventListener('click',()=>{
+    save.gentleCue=!save.gentleCue;
+    $('#cue-btn').setAttribute('aria-pressed',String(save.gentleCue));
+    $('#cue-state').textContent=save.gentleCue?'On':'Off';
+    persist();scheduleCue();
+  });
+  $('#cue-btn').setAttribute('aria-pressed',String(save.gentleCue));
+  $('#cue-state').textContent=save.gentleCue?'On':'Off';
   appearance();
 
   function renderQuickChoices() {
@@ -1062,6 +1010,12 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) storeBoard(); });
   window.addEventListener('pagehide', storeBoard);
 
+  document.addEventListener('pointerdown',clearCue,true);
+  document.addEventListener('pointerup',scheduleCue);
+  document.addEventListener('keydown',scheduleCue,true);
+  window.addEventListener('blur',clearCue);
+  window.addEventListener('focus',scheduleCue);
+  document.addEventListener('visibilitychange',()=>document.hidden?clearCue():scheduleCue());
   open(initial());
   // How to play opens only from the ? button or the ? key, never on load (Luke, 2026-10-04).
   window.__notan = { S, RAMP, PLUS, open, next, endless, isSolved };

@@ -7,7 +7,8 @@
  *    than 2 between neighbors. Levels 41–53 have at most three
  *    mirror-symmetric pictures, spaced out as breathers.
  * 3. The endless generator only yields unique, line-solvable boards, and
- *    the same seed always gives the same board. */
+ *    the same seed always gives the same board. Seeds from FREE_SEED on are
+ *    never mirror-symmetric; older seeds keep their original boards. */
 const E = require('./engine.js');
 const LEVELS = require('./levels.js');
 const PLUS = require('./plus-levels.js');
@@ -124,6 +125,21 @@ for (const n of [5, 8, 10, 12, 15]) {
   }
 }
 console.log(`generator: ${made}/200 boards unique and line-solvable`);
+// Quick play from FREE_SEED on: no mirror symmetry, still unique and line-solvable.
+let free = 0;
+for (const n of [5, 8, 10, 12, 15]) {
+  for (let seed = E.FREE_SEED; seed < E.FREE_SEED + 30; seed++) {
+    const g = E.generate(seed, n);
+    if (!g) { bad(`generate(${seed}, ${n}) gave nothing`); continue; }
+    if (E.mirrored(g.sol, n, n)) bad(`generate(${seed}, ${n}) is mirror-symmetric`);
+    if (E.countSolutions(g.rows, g.cols, n, n, 2) !== 1) bad(`generate(${seed}, ${n}) is not unique`);
+    if (!E.measure(g.rows, g.cols, n, n).solvable) bad(`generate(${seed}, ${n}) needs a guess`);
+    if (!E.same(Array.from(g.sol), Array.from(E.generate(seed, n).sol))) bad(`generate(${seed}, ${n}) is not deterministic`);
+    free++;
+  }
+}
+console.log(`unmirrored: ${free}/150 boards`);
+if (!E.mirrored(E.generate(76449, 8).sol, 8, 8)) bad('old seed 76449 lost its board');
 
 // --- the line solver on a few hand-checked lines
 const sl = (cells, clue) => { const r = E.solveLine(cells, clue); return r && r.join(','); };

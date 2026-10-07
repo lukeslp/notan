@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css?v=c8936440">
+<link rel="stylesheet" href="./notan.css?v=3872f5f4">
 </head>
 <body>
 <main id="app">
@@ -86,103 +86,62 @@ try {
   <p id="live" class="sr-only" role="status" aria-live="polite"></p>
 </main>
 
-<dialog class="sheet" id="help" aria-labelledby="help-title">
-  <div class="sheet-in">
-    <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
-    <h2 id="help-title">How to play</h2>
-    <form method="dialog" class="primary-action"><button class="text-action" id="help-go" autofocus>Play</button></form>
-    <p>Fill squares so every row and column matches its numbers. Each number is a run of filled squares, in order, with at least one empty square between runs. Finish and a picture appears.</p>
-    <ul class="eg">
-      <li>
-        <span class="eg-row" aria-hidden="true"><span class="eg-clue">3 1</span><span class="eg-cells"><i class="on"></i><i class="on"></i><i class="on"></i><i></i><i class="on"></i></span></span>
-        <span class="eg-note">3 1 in five squares fits one way: three, a gap, one.</span>
-      </li>
-      <li>
-        <span class="eg-row" aria-hidden="true"><span class="eg-clue">4</span><span class="eg-cells span4"><i></i><i class="on"></i><i class="on"></i><i class="on"></i><i></i></span></span>
-        <span class="eg-note">A 4 in five squares sits in one of two places (the bars). The middle three are filled either way.</span>
-      </li>
-      <li>
-        <span class="eg-row" aria-hidden="true"><span class="eg-clue">3</span><span class="eg-cells"><i class="q"></i><i class="q"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span>
-        <span class="eg-note">Hold a square (or right-click it) to mark it empty with a dot, once you know it can't be filled.</span>
-      </li>
-      <li>
-        <span class="eg-row" aria-hidden="true"><span class="eg-clue locked">5</span><span class="eg-cells"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></span></span>
-        <span class="eg-note">Hold a row's or column's numbers (or right-click them) to lock a finished line, so stray taps can't change it. Hold again to unlock.</span>
-      </li>
-    </ul>
-    <ul class="keys">
-      <li>Tap a square to fill it immediately; tap it later to clear it. Double-tap to mark it empty with a dot. Double-tap a dotted square to clear it.</li>
-      <li>Hold or right-click to mark a square empty with a dot. Do it again to clear the dot.</li>
-      <li>A number fades and gets a strikethrough once its run is finished and closed off by a dot or the edge. That's your bookkeeping, not a check: only the finished picture says you're right.</li>
-      <li>Drag along a path to fill every square you cross. Start on a filled square to clear a path; use mark mode or hold first to mark a path.</li>
-      <li><b>Arrows</b> move · <b>Space</b> fill · <b>X</b> mark · <b>Z</b> undo</li>
-      <li><b>L</b> locks or unlocks the focused square’s row; <b>Shift+L</b> its column.</li>
-      <li>Bottom left: undo and mark mode, which makes taps place dots instead of filling. Tap the level number to pick a level.</li>
-      <li>Settings, bottom right, has Quick play (a fresh random board at the size you choose), Hint, Zoom, the light or dark theme, and Reset. To start over, choose Settings → Reset → Level. Hold the empty background to open it from anywhere. After a Quick play board, Share blank sends that same unsolved board to a friend.</li>
-    </ul>
-    <h3 id="help-hint-title">Stuck?</h3>
-    <div class="sizes" role="group" aria-labelledby="help-hint-title" aria-describedby="help-hint-note">
-      <button type="button" class="size-choice hint-action" id="help-hint-btn" aria-label="Show a hint">Hint</button>
-    </div>
-    <p class="sheet-note" id="help-hint-note">A dashed ring marks a wrong square. A solid ring marks a square you can work out from the outlined numbers.</p>
-    <div class="sheet-foot">
-      <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
+<dialog class="sheet" id="help" aria-labelledby="help-title"><div class="sheet-in"><header class="sheet-head"><h2 id="help-title">How to play</h2><form method="dialog"><button class="sheet-x" aria-label="Close" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form></header><div class="sheet-body">
+<p>Fill squares to match every row and column. Each number is one run.</p>
+<section class="lesson" aria-labelledby="lesson-title">
+  <div class="lesson-heading"><h3 id="lesson-title"></h3><span id="lesson-count" aria-label="Lesson"></span></div>
+  <p id="lesson-task"></p>
+  <div class="practice-line">
+    <div id="lesson-possibilities" class="is-off" aria-label="Two possible positions of the run"></div>
+    <span id="practice-clue" aria-label="Row clue"></span>
+    <div id="practice" role="grid" aria-label="Practice row" aria-describedby="lesson-task practice-controls">
+      <div role="row" id="practice-row"></div>
     </div>
   </div>
-</dialog>
+  <div class="practice-tools" role="group" aria-label="Practice tools">
+    <button type="button" class="text-action" id="practice-mode" aria-pressed="false">Mark empty</button>
+    <button type="button" class="text-action" id="practice-undo">Undo</button>
+    <button type="button" class="text-action" id="practice-reset" hidden>Reset</button>
+    <button type="button" class="text-action" id="practice-show">Show me</button>
+  </div>
+  <p id="practice-feedback" role="status" aria-live="polite"></p>
+  <nav class="lesson-nav" aria-label="Lessons"><button type="button" class="text-action" id="lesson-prev">Back</button><button type="button" class="text-action" id="lesson-next">Next</button></nav>
+</section>
+<dl class="controls" id="practice-controls">
+  <div><dt>Tap</dt><dd>fills or clears</dd></div>
+  <div><dt>Drag</dt><dd>fills a line</dd></div>
+  <div><dt>Double-tap, hold, right-click</dt><dd>marks a square empty</dd></div>
+</dl>
+<div class="sheet-foot"><a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a></div>
+</div></div></dialog>
 
-<dialog class="sheet" id="levels" aria-labelledby="levels-title">
-  <div class="sheet-in">
-    <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
-    <h2 id="levels-title">Levels</h2>
-    <p class="sr-only" id="lv-meta"></p>
+<dialog class="sheet" id="levels" aria-labelledby="levels-title"><div class="sheet-in"><header class="sheet-head"><h2 id="levels-title">Levels</h2><form method="dialog"><button class="sheet-x" aria-label="Close" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form></header><div class="sheet-body"><p class="sr-only" id="lv-meta"></p>
     <ol class="lv-grid" id="lv-grid"></ol>
     <section id="plus-section" hidden aria-labelledby="plus-title">
       <h3 id="plus-title">New Game+</h3>
       <ol class="lv-grid" id="plus-grid"></ol>
     </section>
-  </div>
-</dialog>
+<section aria-labelledby="levels-quick-title"><h3 id="levels-quick-title">New puzzle</h3><div class="sizes" id="sizes" role="group" aria-labelledby="levels-quick-title"></div></section></div></div></dialog>
 
-<dialog class="sheet" id="settings" aria-label="Settings">
-  <div class="sheet-in">
-    <form method="dialog"><button class="sheet-x" aria-label="Close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form>
-    <h3 id="settings-quick-title">Quick play</h3>
-    <div class="sizes" id="settings-sizes" role="group" aria-labelledby="settings-quick-title"></div>
-    <h3 id="hint-title">Hint</h3>
-    <div class="sizes" role="group" aria-labelledby="hint-title">
-      <button type="button" class="size-choice hint-action" id="hint-btn" aria-label="Show a hint">Show</button>
-    </div>
-    <h3 id="reset-title">Reset</h3>
-    <div class="sizes" role="group" aria-labelledby="reset-title">
-      <button type="button" class="size-choice" id="reset-level">Level</button>
-      <button type="button" class="size-choice" id="reset-all" aria-haspopup="dialog">Game</button>
-    </div>
-    <h3 id="zoom-title">Zoom</h3>
-    <div class="sizes" id="zoom-sizes" role="group" aria-labelledby="zoom-title"></div>
-    <button type="button" class="ib" id="theme-btn" aria-label="Theme: system. Switch to light."></button>
-    <div class="sheet-foot">
-      <a class="foot-btn" href="https://lukesteuber.com/">lukesteuber.com</a>
-      <a class="foot-btn" href="https://lukesteuber.com/downloads/">lukesteuber.com/downloads</a>
-    </div>
-  </div>
-</dialog>
+<dialog class="sheet" id="settings" aria-labelledby="settings-title"><div class="sheet-in"><header class="sheet-head"><h2 id="settings-title">Settings</h2><form method="dialog"><button class="sheet-x" aria-label="Close" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form></header><div class="sheet-body">
+<section aria-labelledby="settings-quick-title"><h3 id="settings-quick-title">New puzzle</h3>
+<div class="sizes" id="settings-sizes" role="group" aria-labelledby="settings-quick-title"></div>
+<button type="button" class="text-action hint-action wide-action" id="hint-btn">Show a hint</button></section>
+<section aria-labelledby="appearance-title"><h3 id="appearance-title">Appearance</h3>
+<div class="setting-row"><span id="zoom-title">Zoom</span><div class="sizes" id="zoom-sizes" role="group" aria-labelledby="zoom-title"></div></div>
+<div class="setting-row"><span>Theme</span><button type="button" class="text-action" id="theme-btn" aria-label="Theme: system. Switch to light."></button></div>
+<div class="setting-row"><span id="cue-label">Gentle cue</span><button type="button" class="text-action" id="cue-btn" aria-labelledby="cue-label cue-state" aria-pressed="true"><span id="cue-state">On</span></button></div></section>
+<section aria-labelledby="reset-title"><h3 id="reset-title">Reset</h3><div class="practice-tools"><button type="button" class="text-action" id="reset-level">Reset puzzle</button><button type="button" class="text-action" id="reset-all" aria-haspopup="dialog">Erase progress…</button></div></section>
+</div></div></dialog>
 
-<dialog class="sheet" id="reset-confirm" aria-labelledby="reset-confirm-title">
-  <div class="sheet-in">
-    <h2 id="reset-confirm-title">Reset game?</h2>
-    <p>Erase all progress and start over from level 1?</p>
-    <div class="sizes">
-      <form method="dialog"><button class="text-action" autofocus>Cancel</button></form>
-      <button type="button" class="text-action" id="confirm-reset">Reset game</button>
-    </div>
-  </div>
-</dialog>
+<dialog class="sheet" id="reset-confirm" aria-labelledby="reset-confirm-title"><div class="sheet-in"><header class="sheet-head"><h2 id="reset-confirm-title">Erase progress?</h2><form method="dialog"><button class="sheet-x" aria-label="Close" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form></header><div class="sheet-body"><p>Erase this Preview’s saved progress and start at level 1? Production progress is kept.</p><div class="practice-tools"><form method="dialog"><button class="text-action">Cancel</button></form><button type="button" class="text-action" id="confirm-reset">Erase progress</button></div></div></div></dialog>
 
-<script src="./engine.js?v=edf79bce"></script>
+<script src="./engine.js?v=61f57d3c"></script>
 <script src="./levels.js?v=4e9118b8"></script>
 <script src="./plus-levels.js?v=4f48e40f"></script>
-<script src="./notan.js?v=60733912"></script>
+<script src="./paint-input.js?v=6de27274"></script>
+<script src="./notan.js?v=46d3bbf8"></script>
+<script src="./practice.js?v=292120d0"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>
 </html>
