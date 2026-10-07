@@ -457,3 +457,6 @@ dialog.sheet::backdrop { background:var(--scrim); }
 
 /* Lesson tasks reserve two lines, so a one-line task does not shrink the sheet. */
 #lesson-task { min-height: 2lh; }
+
+/* Holding a lesson square marks it; it must not start a text selection or callout. */
+#help { -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
