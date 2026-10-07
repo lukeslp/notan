@@ -3,7 +3,7 @@
 A black-and-white nonogram for the browser. Fill squares so every row and column matches its
 numbers. When you finish, a picture appears.
 
-Play it at <https://dr.eamer.dev/games/notan/>.
+Play it at <https://playnotan.com/>.
 
 ## What's in it
 
