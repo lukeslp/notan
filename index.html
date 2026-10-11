@@ -29,7 +29,7 @@ try {
   if ([100, 115, 130, 150].includes(appearance.zoom)) document.documentElement.style.setProperty('--zoom', appearance.zoom / 100);
 } catch (_) { /* Defaults also work when storage is unavailable. */ }
 </script>
-<link rel="stylesheet" href="./notan.css?v=4819e96d">
+<link rel="stylesheet" href="./notan.css?v=108b8647">
 </head>
 <body>
 <main id="app">
@@ -71,6 +71,9 @@ try {
       </button>
       <button type="button" class="ib" id="mode-btn" aria-label="Mark mode" aria-pressed="false">
         <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4.5" y="4.5" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6"/><rect class="m-fill" x="8.5" y="8.5" width="7" height="7" fill="currentColor"/><circle class="m-dot" cx="12" cy="12" r="2" fill="currentColor" style="display:none"/></svg>
+      </button>
+      <button type="button" class="ib" id="hint-btn" aria-label="Hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 22h4M8 14a7 7 0 1 1 8 0l-1 4H9Z"/></svg>
       </button>
     </div>
     <div class="group" role="group" aria-label="Settings and help">
@@ -125,12 +128,10 @@ try {
 
 <dialog class="sheet" id="settings" aria-labelledby="settings-title"><div class="sheet-in"><header class="sheet-head"><h2 id="settings-title">Settings</h2><form method="dialog"><button class="sheet-x" aria-label="Close" autofocus><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button></form></header><div class="sheet-body">
 <section aria-labelledby="settings-quick-title"><h3 id="settings-quick-title">New puzzle</h3>
-<div class="sizes" id="settings-sizes" role="group" aria-labelledby="settings-quick-title"></div>
-<button type="button" class="text-action hint-action wide-action" id="hint-btn">Show a hint</button></section>
+<div class="sizes" id="settings-sizes" role="group" aria-labelledby="settings-quick-title"></div></section>
 <section aria-labelledby="appearance-title"><h3 id="appearance-title">Appearance</h3>
 <div class="setting-row"><span id="zoom-title">Zoom</span><div class="sizes" id="zoom-sizes" role="group" aria-labelledby="zoom-title"></div></div>
-<div class="setting-row"><span>Theme</span><button type="button" class="text-action" id="theme-btn" aria-label="Theme: system. Switch to light."></button></div>
-<div class="setting-row"><span id="cue-label">Gentle cue</span><button type="button" class="text-action" id="cue-btn" aria-labelledby="cue-label cue-state" aria-pressed="true"><span id="cue-state">On</span></button></div></section>
+<div class="setting-row"><span>Theme</span><button type="button" class="text-action" id="theme-btn" aria-label="Theme: system. Switch to light."></button></div></section>
 <section aria-labelledby="reset-title"><h3 id="reset-title">Reset</h3><div class="practice-tools"><button type="button" class="text-action" id="reset-level">Reset puzzle</button><button type="button" class="text-action" id="reset-all" aria-haspopup="dialog">Erase progress…</button></div></section>
 </div></div></dialog>
 
@@ -139,8 +140,8 @@ try {
 <script src="./engine.js?v=61f57d3c"></script>
 <script src="./levels.js?v=4e9118b8"></script>
 <script src="./plus-levels.js?v=4f48e40f"></script>
-<script src="./paint-input.js?v=6de27274"></script>
-<script src="./notan.js?v=46d3bbf8"></script>
+<script src="./paint-input.js?v=5bb412f7"></script>
+<script src="./notan.js?v=547ddbbc"></script>
 <script src="./practice.js?v=292120d0"></script>
 <script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
 </body>

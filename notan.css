@@ -208,15 +208,9 @@ button { font: inherit; color: inherit; }
   padding-right: calc(var(--f) * 0.55);
 }
 .clue.ok { color: var(--done); }
-/* Each number fades on its own once its run is finished, and pops once as it does. */
+/* Each number fades on its own once its run is finished. It does not bounce. */
 .clue span { display: inline-block; transition: color 0.3s; }
 .clue span.n-done { color: var(--done); text-decoration: line-through; text-decoration-thickness: 2px; }
-.clue span.pop { animation: clue-pop 0.45s ease-out; }
-@keyframes clue-pop {
-  0% { transform: scale(1); }
-  40% { transform: scale(1.4); color: var(--text); }
-  100% { transform: scale(1); }
-}
 /* A line that can't work as marked gets a short dashed tick beside it. */
 .clue.bad::after {
   content: "";
@@ -279,12 +273,6 @@ button { font: inherit; color: inherit; }
   transition: opacity 0.12s;
 }
 .cell.mark::after { opacity: 1; }
-/* Level 1, first visit: a faint fill grows and fades in one square until the first move. */
-.cell.nudge::before { animation: nudge 1.8s ease-in-out 0.2s infinite; }
-@keyframes nudge {
-  0%, 100% { transform: scale(0); opacity: 0.28; }
-  50% { transform: scale(0.62); opacity: 0.28; }
-}
 
 /* Solved: the lines, marks and clues go; the picture stays and moves to center. */
 .board { transform-origin: 0 0; }
@@ -390,7 +378,6 @@ dialog.sheet::backdrop { background:var(--scrim); }
 .text-action[aria-disabled="true"] { color:var(--sub); cursor:default; }
 .text-action:hover,.size-choice:hover,.lv:hover { background:var(--band); }
 .sheet :is(button,a,summary,[role="gridcell"]):focus-visible { outline:2px solid var(--ink); outline-offset:2px; }
-.wide-action { margin-top:12px; }
 .setting-row { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; margin-top:8px; }
 #theme-btn { display:flex; align-items:center; gap:8px; }
 #theme-btn svg { width:20px; height:20px; flex:none; }
@@ -433,15 +420,18 @@ dialog.sheet::backdrop { background:var(--scrim); }
 .rules p { color:var(--sub); margin:0 0 10px; font-size:calc(15px * var(--zoom)); line-height:1.45; }
 .rules b { color:var(--text); font-weight:500; }
 @media(max-width:480px) { .sheet-body { padding:16px; } .sheet-head { padding:8px 12px; } }
-@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } .cell.nudge::before { opacity:.2; transform:scale(.62); } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { transition:none!important; animation:none!important; } }
 @media(forced-colors:active) { :root { --ink:CanvasText; --text:CanvasText; --bg:Canvas; --line:GrayText; --guide:GrayText; --frame:CanvasText; --mark:CanvasText; --done:GrayText; --icon:ButtonText; } .board,.practice-cell,.possibility { forced-color-adjust:none; } .cursor,.hint { border-color:Highlight; } }
 
 /* Quiet rules beside locked clues, independent of completion and conflict ticks. */
-.clue.locked::before, .eg-clue.locked::before { content: ""; position: absolute; background: var(--sub); }
-.rc.locked::before { width: 2px; right: 3px; top: 25%; bottom: 25%; }
-.cc.locked::before { height: 2px; bottom: 3px; left: 25%; right: 25%; }
-.eg-clue.locked { position: relative; color: var(--done); }
-.eg-clue.locked::before { width: 2px; right: -5px; top: 0; bottom: 0; }
+/* A locked line's numbers turn red. The lock used to be a short bar beside the
+ * clue, in the same spot as the cannot-fit tick. */
+.clue.locked, .clue.locked span, .clue.locked span.n-done { color: #d93036; }
+@media(forced-colors:active) { .clue.locked { outline: 1px solid CanvasText; outline-offset: -2px; } }
+/* The hint shows its answer inside the ring: a faint fill, or the empty dot. */
+.hint.fill::after, .hint.empty::after { content: ""; position: absolute; background: var(--ink); opacity: 0.38; }
+.hint.fill::after { inset: 22%; }
+.hint.empty::after { left: 50%; top: 50%; width: var(--dot); height: var(--dot); margin: calc(var(--dot) / -2) 0 0 calc(var(--dot) / -2); border-radius: 50%; opacity: 0.8; }
 
 #mode-btn[aria-pressed="true"] { background: var(--ink); color: var(--bg); }
 /* Controls, at a glance (Luke, 2026-10-06: "don't need much more text whatsoever"). */

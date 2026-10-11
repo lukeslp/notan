@@ -14,6 +14,50 @@
   const HOLD_MS = 380, DOUBLE_MS = 300;
   const $ = (s) => document.querySelector(s);
 
+  /* ---------- one home for progress ----------
+   * The game is served from three addresses and a browser keeps a separate save
+   * for each, so a player who came back through a different link found level 1.
+   * The two older addresses now hand their save to playnotan.com in the URL
+   * fragment (never sent to a server); the game folds it into its own save.
+   * Folding only ever adds: solved boards, best times, boards in progress. */
+  const HOME = 'playnotan.com', OLD_HOMES = ['dr.eamer.dev', 'lukesteuber.com'];
+  // Off until the hand-off has been tried on the real hosts; the fold below is live.
+  const HAND_OFF = false;
+  if (HAND_OFF && OLD_HOMES.includes(location.hostname.replace(/^www\./, ''))) {
+    let carry = '';
+    try {
+      const v = localStorage.getItem(KEY);
+      if (v && v.length < 200000) carry = '#carry=' + encodeURIComponent(btoa(unescape(encodeURIComponent(v))));
+    } catch (e) { /* nothing to carry */ }
+    location.replace('https://' + HOME + '/' + location.search + carry);
+    return;
+  }
+  (function fold() {
+    if (!location.hash.startsWith('#carry=')) return;
+    try {
+      const from = JSON.parse(decodeURIComponent(escape(atob(decodeURIComponent(location.hash.slice(7))))));
+      if (!from || typeof from !== 'object' || Array.isArray(from)) return;
+      const had = localStorage.getItem(KEY);
+      const to = had ? JSON.parse(had) : null;
+      if (!to || typeof to !== 'object') { localStorage.setItem(KEY, JSON.stringify(from)); return; }
+      const plain = (v) => (v && typeof v === 'object' && !Array.isArray(v) ? v : {});
+      to.solved = plain(to.solved); to.boards = plain(to.boards); to.hinted = plain(to.hinted);
+      for (const [id, t] of Object.entries(plain(from.solved))) {
+        if (typeof t !== 'number') continue;
+        const mine = to.solved[id];
+        if (typeof mine === 'number' && mine > 0 && mine <= t) continue;
+        to.solved[id] = t;
+        if (plain(from.hinted)[id] === true) to.hinted[id] = true; else delete to.hinted[id];
+      }
+      for (const [id, b] of Object.entries(plain(from.boards))) if (!to.boards[id] && typeof to.solved[id] !== 'number') to.boards[id] = b;
+      if (!to.endless && from.endless) to.endless = from.endless;
+      if (from.plusUnlocked === true) to.plusUnlocked = true;
+      // Stay where this save is, unless it has not got anywhere yet.
+      if (!Object.keys(to.solved).length || typeof to.at !== 'string') { if (typeof from.at === 'string') to.at = from.at; }
+      localStorage.setItem(KEY, JSON.stringify(to));
+    } catch (e) { /* a damaged carry is ignored; the save here is untouched */ }
+  })();
+
   /* ---------- storage (everything optional; private mode just doesn't save) ---------- */
   function readSave() {
     try {
@@ -31,7 +75,6 @@
     endless: raw.endless && typeof raw.endless === 'object' ? raw.endless : null,
     seen: !!raw.seen,
     mark: !!raw.mark,
-    gentleCue: raw.gentleCue !== false,
     quickSize: SIZES.includes(raw.quickSize) ? raw.quickSize : 10,
     zoom: [100, 115, 130, 150].includes(raw.zoom) ? raw.zoom : 100,
     theme: ['light', 'dark'].includes(raw.theme) ? raw.theme : 'system',
@@ -96,7 +139,7 @@
   const shareBtn = $('#share-btn');
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
-  const resetConfirm = $('#reset-confirm'), hintBtns = document.querySelectorAll('.hint-action');
+  const resetConfirm = $('#reset-confirm'), hintBtn = $('#hint-btn');
   const plusSection = $('#plus-section'), plusGrid = $('#plus-grid'), unlockNotice = $('#unlock-notice');
   const dialogs = [help, levels, settings, resetConfirm];
   const modalOpen = () => dialogs.some((dlg) => dlg.open);
@@ -113,47 +156,9 @@
   function fmt(s) { return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); }
   function label(p) { return p.endless ? 'Endless ' + p.size + ' by ' + p.size : (p.plus ? 'New Game+ level ' : 'Level ') + (p.index + 1); }
 
-
-  /* A single opt-out idle cue per puzzle. The solver must establish a blank
-   * filled square; never pulse an arbitrary first cell or reveal a guess. */
-  let cueTimer=0, cueEnd=0;
-  function clearCue(){
-    clearTimeout(cueTimer);clearTimeout(cueEnd);
-    grid.querySelectorAll('.nudge').forEach(n=>n.classList.remove('nudge'));
-  }
-  function cueCandidate(){
-    const {w,h,sol,rows,cols}=S.puz;
-    if(S.cells.some((v,i)=>(v===INK&&sol[i]!==1)||(v===MARK&&sol[i]===1)))return -1;
-    for(const [count,length,clues,at] of [
-      [h,w,rows,(k,n)=>k*w+n],[w,h,cols,(k,n)=>n*w+k]]) {
-      for(let k=0;k<count;k++){
-        const idx=Array.from({length},(_,n)=>at(k,n));
-        const known=idx.map(i=>S.cells[i]===INK?1:S.cells[i]===MARK?0:-1);
-        const deduced=E.solveLine(known,clues[k]);
-        if(!deduced)continue;
-        const n=idx.findIndex((i,n)=>S.cells[i]===BLANK&&!isLocked(i)&&deduced[n]===1&&sol[i]===1);
-        if(n>=0)return idx[n];
-      }
-    }
-    return -1;
-  }
-  function scheduleCue(){
-    clearCue();
-    if(!save.gentleCue||!S.puz||S.solved||S.cueShown||modalOpen()||document.hidden||S.drag)return;
-    cueTimer=setTimeout(()=>{
-      if(modalOpen()||document.hidden||S.drag||S.solved)return;
-      const i=cueCandidate();if(i<0)return;
-      S.cueShown=true;S.hinted=true;storeBoard();
-      cellEls[i].classList.add('nudge');
-      announce('Gentle cue: row '+(Math.floor(i/S.puz.w)+1)+', column '+(i%S.puz.w+1)+' can be filled from the clues.');
-      cueEnd=setTimeout(()=>cellEls[i]?.classList.remove('nudge'),3200);
-    },10000);
-  }
-
   /* ---------- open a puzzle ---------- */
   function open(puz) {
     if (!puz) return;
-    clearCue();
     painter.cancel();
     stopClock();
     clearTimeout(finishTimer);
@@ -170,7 +175,6 @@
     S.cells = new Int8Array(n);
     S.time = 0;
     S.hinted = false;
-    S.cueShown = false;
     clearHint();
     const saved = puz.endless
       ? (save.endless && save.endless.size === puz.size && save.endless.seed === puz.seed ? save.endless : null)
@@ -179,7 +183,6 @@
       for (let i = 0; i < n; i++) { const v = saved.c.charCodeAt(i) - 48; S.cells[i] = v === 1 || v === 2 ? v : 0; }
       S.time = Math.max(0, saved.t | 0);
       S.hinted = saved.h === true;
-      S.cueShown = saved.n === true;
       for (const kind of ['row', 'col']) {
         const locks = saved.locks && saved.locks[kind];
         S.locks[kind] = S.locks[kind].map((_, i) => Array.isArray(locks) && locks[i] === true);
@@ -188,7 +191,7 @@
     if (puz.endless) {
       save.quickSize = puz.size;
       save.at = 'endless';
-      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks, h: S.hinted || undefined, n: S.cueShown || undefined };
+      save.endless = { size: puz.size, seed: puz.seed, c: Array.from(S.cells).join(''), t: S.time, locks: S.locks, h: S.hinted || undefined };
     } else save.at = puz.id;
     persist();
     renderQuickChoices();
@@ -210,7 +213,6 @@
     board.classList.remove('instant');
     if (refocus) setFocus(0, true);
     if (isSolved()) finish(true);
-    else scheduleCue();
   }
 
   function build() {
@@ -264,7 +266,7 @@
   }
 
   /* ---------- layout: the largest cell that fits between the readout and the icons ---------- */
-  function fontFor(cell) { return Math.max(10, Math.min(15, Math.round(cell * 0.42))) * save.zoom / 100; }
+  function fontFor(cell) { return Math.max(11, Math.min(20, Math.round(cell * 0.46))) * save.zoom / 100; }
   function layout() {
     if (!S.puz) return;
     const { w, h, rows, cols } = S.puz;
@@ -320,7 +322,7 @@
   /* Returns true when the line matches its clue. */
   /* A line's clue dims when its filled runs match it; before that, each number
    * fades on its own once its run is finished and closed off (E.doneClues reads
-   * the board, never the solution). A number that just finished pops once. */
+   * the board, never the solution). */
   function lineStatus(kind, k, animate) {
     const clue = kind === 'row' ? S.puz.rows[k] : S.puz.cols[k];
     const head = kind === 'row' ? rowHeads[k] : colHeads[k];
@@ -333,7 +335,6 @@
     Array.from(head.children).forEach((n, i) => {
       const done = ok || parts[i];
       if (done) count++;
-      if (animate && done && !n.classList.contains('n-done')) pop(n);
       n.classList.toggle('n-done', done);
     });
     head.classList.toggle('locked', S.locks[kind][k]);
@@ -342,12 +343,6 @@
     const name = (kind === 'row' ? 'Row ' : 'Column ') + (k + 1) + (S.locks[kind][k] ? ', locked' : ', unlocked') + ', clue ' + (clue.length ? clue.join(' ') : '0');
     head.setAttribute('aria-label', name + (ok ? ', done' : bad ? ', cannot fit as marked' : count ? ', ' + count + ' of ' + clue.length + ' numbers done' : ''));
     return ok;
-  }
-  function pop(n) {
-    n.classList.remove('pop');
-    void n.offsetWidth;
-    n.classList.add('pop');
-    n.addEventListener('animationend', () => n.classList.remove('pop'), { once: true });
   }
   function renderAll() {
     for (let i = 0; i < S.cells.length; i++) renderCell(i);
@@ -377,7 +372,7 @@
     lvlBtn.setAttribute('aria-label', (p.endless ? 'Endless, ' + p.size + ' by ' + p.size : label(p) + ' of ' + sequence(p).length) + '. Choose a level');
     clock.textContent = fmt(S.time);
     undoBtn.setAttribute('aria-disabled', S.undo.length && !S.solved ? 'false' : 'true');
-    hintBtns.forEach((b) => b.setAttribute('aria-disabled', S.solved ? 'true' : 'false'));
+    hintBtn.setAttribute('aria-disabled', S.solved ? 'true' : 'false');
     modeBtn.setAttribute('aria-pressed', S.mark ? 'true' : 'false');
     modeBtn.querySelector('.m-fill').style.display = S.mark ? 'none' : '';
     modeBtn.querySelector('.m-dot').style.display = S.mark ? '' : 'none';
@@ -386,7 +381,6 @@
   /* ---------- clock ---------- */
   let tick = null;
   function startClock() {
-    clearCue();
     if (tick || S.solved) return;
     tick = setInterval(() => {
       if (document.hidden || modalOpen()) return;
@@ -402,9 +396,9 @@
     const c = Array.from(S.cells).join('');
     const blank = !S.cells.some((v) => v);
     const h = S.hinted || undefined;
-    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks, h, n: S.cueShown || undefined };
+    if (S.puz.endless) save.endless = { size: S.puz.size, seed: S.puz.seed, c, t: S.time, locks: S.locks, h };
     else if (blank && !S.time && !S.hinted && !S.locks.row.some(Boolean) && !S.locks.col.some(Boolean)) delete save.boards[S.puz.id];
-    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks, h, n: S.cueShown || undefined };
+    else save.boards[S.puz.id] = { c, t: S.time, locks: S.locks, h };
     persist();
   }
 
@@ -434,7 +428,6 @@
   }
   function afterChange(idx, speak) {
     clearHint();
-    scheduleCue();
     const done = updateLines(idx);
     storeBoard();
     hud();
@@ -512,20 +505,36 @@
     }
     for (let i = 0; i < S.cells.length; i++) if (wrong(i)) return { i, wrong: true };
     const known = Array.from(S.cells, (v) => (v === INK ? 1 : v === MARK ? 0 : -1));
-    let best = null;
-    const consider = (kind, k, idx) => {
-      const line = idx.map((i) => known[i]);
-      if (!line.includes(-1)) return;
-      const res = E.solveLine(line, kind === 'row' ? rows[k] : cols[k]);
-      if (!res) return;
+    const lines = [];
+    for (let r = 0; r < h; r++) lines.push({ kind: 'row', k: r, clue: rows[r], idx: Array.from({ length: w }, (_, c) => r * w + c) });
+    for (let c = 0; c < w; c++) lines.push({ kind: 'col', k: c, clue: cols[c], idx: Array.from({ length: h }, (_, r) => r * w + c) });
+    const settle = (L, from) => {
+      const line = L.idx.map((i) => from[i]);
       const fill = [], empty = [];
-      idx.forEach((i, n) => { if (line[n] === -1 && res[n] !== -1) (res[n] === 1 ? fill : empty).push(i); });
-      const weight = fill.length * 100 + empty.length;
-      if (weight && (!best || weight > best.weight)) best = { weight, kind, k, i: fill.length ? fill[0] : empty[0] };
+      const res = line.includes(-1) ? E.solveLine(line, L.clue) : null;
+      if (res) L.idx.forEach((i, n) => { if (line[n] === -1 && res[n] !== -1) (res[n] === 1 ? fill : empty).push(i); });
+      return { fill, empty };
     };
-    for (let r = 0; r < h; r++) consider('row', r, Array.from({ length: w }, (_, c) => r * w + c));
-    for (let c = 0; c < w; c++) consider('col', c, Array.from({ length: h }, (_, r) => r * w + c));
-    return best;
+    let best = null, spare = null;
+    for (const L of lines) {
+      const { fill, empty } = settle(L, known);
+      if (fill.length && (!best || fill.length > best.weight)) best = { weight: fill.length, kind: L.kind, k: L.k, i: fill[0], fill: true };
+      if (empty.length && !spare) spare = { kind: L.kind, k: L.k, i: empty[0], fill: false };
+    }
+    if (best) return best;
+    // No line settles a square to fill from what is on the board. A player who
+    // never marks empties would be shown the same empty square for ever, so
+    // carry the empties forward quietly until a line settles a fill.
+    const ahead = known.slice();
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const L of lines) {
+        const { fill, empty } = settle(L, ahead);
+        if (fill.length) return { kind: L.kind, k: L.k, i: fill[0], fill: true };
+        for (const i of empty) { ahead[i] = 0; changed = true; }
+      }
+    }
+    return spare;
   }
   function placeHint() {
     if (!S.hint || !S.geo) return;
@@ -536,13 +545,11 @@
   function clearHint() {
     if (!S.hint) return;
     S.hint = null;
-    hintEl.classList.remove('on', 'wrong');
+    hintEl.classList.remove('on', 'wrong', 'fill', 'empty');
     grid.querySelectorAll('.clue.hinted').forEach((n) => n.classList.remove('hinted'));
   }
   function showHint() {
     if (!S.puz || S.solved) return;
-    clearCue();
-    S.cueShown = true;
     const hint = findHint();
     if (!hint) { announce('No hint: every square is already settled'); return; }
     clearHint();
@@ -551,6 +558,8 @@
     storeBoard();
     if (hint.kind) (hint.kind === 'row' ? rowHeads : colHeads)[hint.k].classList.add('hinted');
     hintEl.classList.toggle('wrong', !!hint.wrong);
+    hintEl.classList.toggle('fill', !hint.wrong && hint.fill === true);
+    hintEl.classList.toggle('empty', !hint.wrong && hint.fill === false);
     placeHint();
     void hintEl.offsetWidth;
     hintEl.classList.add('on');
@@ -558,14 +567,12 @@
     const w = S.puz.w, r = Math.floor(hint.i / w) + 1, c = hint.i % w + 1;
     announce(hint.wrong
       ? 'Hint: row ' + r + ', column ' + c + ' is wrong' + (isLocked(hint.i) ? ', and its line is locked' : '') + '.'
-      : hint.kind === 'row' ? 'Hint: row ' + r + ' settles the square in column ' + c + '.'
-        : 'Hint: column ' + c + ' settles the square in row ' + r + '.');
+      : 'Hint: row ' + r + ', column ' + c + (hint.fill ? ' can be filled.' : ' stays empty.'));
   }
 
   /* ---------- solved ---------- */
   function finish(quiet) {
     clearHint();
-    clearCue();
     S.solved = true;
     S.locks.row.fill(false); S.locks.col.fill(false);
     renderAll();
@@ -839,11 +846,9 @@
     if (dlg.open) return;
     painter.cancel();
     cancelClueHold();
-    clearCue();
     dlg.showModal();
     dlg.querySelector('.sheet-body').scrollTop = 0;
     dlg.addEventListener('close', () => {
-      scheduleCue();
       // close() restores native focus synchronously, but this event is queued.
       // Keep any focus chosen since then (by the player or a new board/dialog).
       const active = document.activeElement;
@@ -873,11 +878,7 @@
   });
 
   $('#reset-level').addEventListener('click', () => { startOver(); settings.close(); });
-  hintBtns.forEach((b) => b.addEventListener('click', () => {
-    if (b.getAttribute('aria-disabled') === 'true') return;
-    b.closest('dialog').close();
-    showHint();
-  }));
+  hintBtn.addEventListener('click', () => { if (hintBtn.getAttribute('aria-disabled') !== 'true') showHint(); });
   $('#reset-all').addEventListener('click', () => showSheet(resetConfirm, $('#reset-all')));
   $('#confirm-reset').addEventListener('click', () => {
     save.solved = {}; save.boards = {}; save.hinted = {}; save.endless = null; save.at = null; save.plusUnlocked = false;
@@ -913,14 +914,6 @@
     save.theme = { system: 'light', light: 'dark', dark: 'system' }[save.theme];
     appearance(); persist();
   });
-  $('#cue-btn').addEventListener('click',()=>{
-    save.gentleCue=!save.gentleCue;
-    $('#cue-btn').setAttribute('aria-pressed',String(save.gentleCue));
-    $('#cue-state').textContent=save.gentleCue?'On':'Off';
-    persist();scheduleCue();
-  });
-  $('#cue-btn').setAttribute('aria-pressed',String(save.gentleCue));
-  $('#cue-state').textContent=save.gentleCue?'On':'Off';
   appearance();
 
   function renderQuickChoices() {
@@ -981,7 +974,7 @@
   }
   function initial() {
     const q = new URLSearchParams(location.search);
-    if (q.has('plus') && save.plusUnlocked) {
+    if (q.has('plus')) { // a reload keeps its board even if the browser dropped the save
       const n = Number(q.get('plus'));
       if (Number.isInteger(n) && n >= 1 && n <= PLUS.length) return PLUS[n - 1];
     }
@@ -1010,12 +1003,6 @@
   document.addEventListener('visibilitychange', () => { if (document.hidden) storeBoard(); });
   window.addEventListener('pagehide', storeBoard);
 
-  document.addEventListener('pointerdown',clearCue,true);
-  document.addEventListener('pointerup',scheduleCue);
-  document.addEventListener('keydown',scheduleCue,true);
-  window.addEventListener('blur',clearCue);
-  window.addEventListener('focus',scheduleCue);
-  document.addEventListener('visibilitychange',()=>document.hidden?clearCue():scheduleCue());
   open(initial());
   // How to play opens only from the ? button or the ? key, never on load (Luke, 2026-10-04).
   window.__notan = { S, RAMP, PLUS, open, next, endless, isSolved };

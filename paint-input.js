@@ -35,12 +35,15 @@
       if(s.pending)clearTimeout(s.pending.timer);
       s.pending=null;
     }
+    // A mouse can lose capture a moment before its pointerup: when a move with no
+    // button held lands first, the browser lets go early. That is a release, not a cancel.
+    const released = e => e.type==='pointerup' || e.type==='lostpointercapture';
     function end(e) {
       if(!s.drag || (e.pointerId!=null && e.pointerId!==s.drag.id))return;
       clearHold();
       if(e.type==='pointerup')move(e);
       const d=s.drag; s.drag=null;
-      if(e.type!=='pointerup') {
+      if(!released(e)) {
         s.cells=d.before; if(d.double)s.undo.push(d.snap);
         s.lastTap=null; o.restore(); return;
       }
