@@ -974,7 +974,11 @@
    * both travel together, so rect A in the old view always lies exactly on
    * rect B in the new one: zooming out, B is the old board's place in the
    * new board; zooming in, A is a tile and B the board it opens into. */
-  const ZOOM_MS = 1400, EASE = 'cubic-bezier(.5,0,.15,1)';
+  /* Calm timing (player feedback, 2026-11-04): hold the solved board to look
+   * at it, then one slow move that eases in and out evenly, then a single
+   * short crossfade. Tests set window.__zoomTiming to shorter values. */
+  const TIMING = Object.assign({ pause: 1800, zoom: 2200, fade: 400 }, window.__zoomTiming || {});
+  const EASE = 'cubic-bezier(.45,0,.55,1)';
 
   let refocus = false; // the lifted view had focus: the next view takes it
   function liftOld() {
@@ -1011,19 +1015,31 @@
 
   function camera(old, A, newEl, B, opts, done) {
     opts = opts || {};
-    if (reduced || !old || !A || !B || !newEl) { if (old) old.el.remove(); done(); return; }
+    const finish = () => { if (old) old.el.remove(); if (newEl) newEl.classList.remove('arriving'); done(); };
+    if (reduced || !old || !A || !B || !newEl) { finish(); return; }
     stage.classList.add('zooming');
     const nb = newEl.getBoundingClientRect();
-    const t = { duration: ZOOM_MS, easing: EASE, fill: 'both' };
+    const from = mapTo(nb, B, A), to = mapTo(old.box, A, B);
     newEl.style.transformOrigin = old.el.style.transformOrigin = '0 0';
-    const run = newEl.animate([{ transform: mapTo(nb, B, A) }, { transform: 'none' }], t);
-    old.el.animate([{ transform: 'none' }, { transform: mapTo(old.box, A, B) }], t);
-    // Zooming out, the old board holds until it has nearly landed, then
-    // melts into the cells that carry it. Zooming in, the world thins out
-    // early so the board can grow through it.
-    const hold = opts.zoomIn ? 0.15 : 0.74;
-    old.el.animate([{ opacity: 1 }, { opacity: 1, offset: hold }, { opacity: 0 }], { duration: ZOOM_MS, easing: 'linear', fill: 'both' });
-    run.finished.then(() => { run.cancel(); old.el.remove(); stage.classList.remove('zooming'); done(); });
+    // The first pose, set before any frame can show the new view at rest.
+    newEl.style.transform = from;
+    // Everything heavy (the next board, its squares, its canvases) is built
+    // by now; give the browser two frames to lay it out, then move.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const t = { duration: TIMING.zoom, easing: EASE, fill: 'both' };
+      const run = newEl.animate([{ transform: from }, { transform: 'none' }], t);
+      newEl.style.transform = '';
+      old.el.animate([{ transform: 'none' }, { transform: to }], t);
+      // Zooming in, the world thins out early so the board grows through it.
+      if (opts.zoomIn) old.el.animate([{ opacity: 1 }, { opacity: 1, offset: 0.15 }, { opacity: 0 }], { duration: TIMING.zoom, easing: 'linear', fill: 'both' });
+      run.finished.then(() => {
+        // Landed: one crossfade, the old picture out and the new board in.
+        newEl.classList.remove('arriving');
+        const end = () => { run.cancel(); old.el.remove(); stage.classList.remove('zooming'); done(); };
+        if (opts.zoomIn) { end(); return; }
+        old.el.animate([{ opacity: 1 }, { opacity: 0 }], { duration: TIMING.fade, easing: 'ease-out', fill: 'forwards' }).finished.then(end);
+      });
+    }));
   }
 
   /* ---------- puzzle view ---------- */
@@ -1393,7 +1409,8 @@
     view.el.classList.add('solved');
     const p = view.p;
     say(!p.hit ? 'Solved.' : p.hits ? `Solved with ${p.hits} ${p.hits === 1 ? 'mine' : 'mines'} hit.` : 'Solved, no mines hit.');
-    setTimeout(() => { const f = view.onSolved; f(); }, reduced ? 200 : 700);
+    // a pause to look at the solved board before anything moves
+    setTimeout(() => { const f = view.onSolved; f(); }, reduced ? Math.min(1200, TIMING.pause) : TIMING.pause);
   }
 
   function gridRect() {
@@ -2016,6 +2033,8 @@
       return;
     }
     const newEl = view.el, B = regionRect();
+    // The new board stays hidden while the old one flies in, then fades in.
+    newEl.classList.add('arriving');
     camera(old, A, newEl, B, {}, () => { busy = false; });
   }
 
@@ -2088,7 +2107,7 @@
       const scene = stage.querySelector('.scene');
       const stack = scene.querySelector('.stack');
       stage.classList.add('zooming');
-      stack.animate([{ transform: 'scale3d(3, 3, 3)' }, { transform: 'none' }], { duration: ZOOM_MS + 200, easing: EASE })
+      stack.animate([{ transform: 'scale3d(3, 3, 3)' }, { transform: 'none' }], { duration: TIMING.zoom, easing: EASE })
         .finished.then(() => { stage.classList.remove('zooming'); setFlat(scene, false, () => { busy = false; }); });
     }, reduced ? 100 : 600);
   }
@@ -2288,5 +2307,5 @@
   init();
 
   // For headless checks.
-  window.ZoomLab = { advance, isSolved, makePuzzle, makeWorld, down, ORDER, state: () => S, render, busy: () => busy, measureFrom, bandFor, TILE_BAND, MINES, commitRun, retryMines, undo, asking: () => asking };
+  window.ZoomLab = { timing: () => Object.assign({}, TIMING), advance, isSolved, makePuzzle, makeWorld, down, ORDER, state: () => S, render, busy: () => busy, measureFrom, bandFor, TILE_BAND, MINES, commitRun, retryMines, undo, asking: () => asking };
 })();

@@ -93,6 +93,7 @@ function selfTest() {
   if (sf) bad.push(`the independent checker disagrees with brute force ${sf} times`);
   const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
   const pg = await b.newPage();
+  await pg.addInitScript(() => { window.__zoomTiming = { pause: 600, zoom: 1300, fade: 300 }; });
   const errs = [];
   pg.on('pageerror', (e) => errs.push(e.message));
   await pg.goto((process.env.BASE || 'http://127.0.0.1:8765') + '/notan-zoom-lab/');

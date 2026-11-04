@@ -34,8 +34,8 @@
     color-scheme: dark;
     --bg: #000000; --ink: #ffffff; --text: #f2f2f2; --sub: #b8b8b8; --done: #5c5c5c;
     --line: #2f2f2f; --frame: #e4e4e4; --mark: #9a9a9a; --band: rgba(255, 255, 255, 0.08); --held: #8a8a8a;
-  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #121212; --wall: #1c1c1c; --void: #000000;
-  --lift: 0 8px 14px -8px rgba(255, 255, 255, 0.3);
+  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #1b1b1b; --wall: #1c1c1c; --void: #000000;
+  --lift: 0 0 0 1px rgba(255, 255, 255, 0.12);
   --press: inset 0 1px 3px rgba(0, 0, 0, 0.75);
   --wellsh: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 3px 10px rgba(0, 0, 0, 0.9);
   --shadow: rgba(255, 255, 255, 0.28);
@@ -46,8 +46,8 @@
   color-scheme: dark;
   --bg: #000000; --ink: #ffffff; --text: #f2f2f2; --sub: #b8b8b8; --done: #5c5c5c;
   --line: #2f2f2f; --frame: #e4e4e4; --mark: #9a9a9a; --band: rgba(255, 255, 255, 0.08); --held: #8a8a8a;
-  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #121212; --wall: #1c1c1c; --void: #000000;
-  --lift: 0 8px 14px -8px rgba(255, 255, 255, 0.3);
+  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #1b1b1b; --wall: #1c1c1c; --void: #000000;
+  --lift: 0 0 0 1px rgba(255, 255, 255, 0.12);
   --press: inset 0 1px 3px rgba(0, 0, 0, 0.75);
   --wellsh: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 3px 10px rgba(0, 0, 0, 0.9);
   --shadow: rgba(255, 255, 255, 0.28);
@@ -176,8 +176,9 @@ button { font: inherit; color: inherit; }
 .cell.given::before { background: transparent; }
 .cell.given.ink::before { background: var(--held); box-shadow: var(--press); transform: none; }
 /* A locked filled square in a row or column run that your own ink joins lights
-   up to ink, still pressed, so the run reads as one block. */
-.cell.given.ink.joined::before { background: var(--ink); }
+   up to ink, with a thin gray inner ring (a crisp edge: the soft pressed
+   shadow blurred on white in dark mode), so the run reads as one block. */
+.cell.given.ink.joined::before { background: var(--ink); box-shadow: inset 0 0 0 1.5px var(--held); }
 .cell .thumb { position: absolute; left: var(--in); top: var(--in); border-radius: var(--r); }
 /* Pixel's middle square is an ordinary locked filled square (gray, or ink
    when your run joins it) with the last board pressed into it, faintly. */
@@ -187,8 +188,6 @@ button { font: inherit; color: inherit; }
    turning slowly the chain's way round. */
 .hole { position: absolute; z-index: 0; pointer-events: none; animation: swirl-cw 90s linear infinite; }
 .hole.ccw { animation-name: swirl-ccw; }
-.pz.enter .hole { animation: rise 0.9s ease 1.0s both, swirl-cw 90s linear infinite; }
-.pz.enter .hole.ccw { animation: rise 0.9s ease 1.0s both, swirl-ccw 90s linear infinite; }
 @keyframes swirl-cw { to { transform: rotate(360deg); } }
 @keyframes swirl-ccw { to { transform: rotate(-360deg); } }
 /* Squares near it lean in, shrink and turn, in a slow wave round the hole. */
@@ -247,19 +246,12 @@ button { font: inherit; color: inherit; }
    and a half squares of a three-square seed). */
 .leaving .pz-bg { opacity: 0; transition: opacity 0.35s ease; }
 .leaving .cursor { display: none; }
-/* The new board's open squares and numbers come up as the camera lands, not
-   mid-flight, where they showed as large faint blocks. */
-.pz.enter .clue, .pz.enter .cell:not(.given) { animation: rise 0.5s ease 1.05s both; }
-/* The carried-over picture lands raised at full ink, then sinks into the well. */
-.pz.enter .cell.given.ink.fresh::before { animation: settle 2.15s linear both; }
-.pz.enter .cell .thumb, .pz.enter .cell.given::after { animation: rise 0.9s ease 1.0s both; }
-/* The merged seed stays hidden while the old board flies in over it, fades in
-   as the old board fades out (the last quarter of the move), then sinks. */
-@keyframes settle {
-  0%, 48% { opacity: 0; background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
-  65% { opacity: 1; background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
-  100% { opacity: 1; background-color: var(--held); box-shadow: var(--press); transform: none; }
-}
+/* A first board fades in whole. A board that a camera move brings in is
+   hidden ("arriving") while the old one flies in, then fades in as the old
+   picture fades out: one crossfade, no per-square animation or shadow paint. */
+.pz.enter:not(.arriving) { animation: rise 0.5s ease both; }
+.pz .clue, .pz .cell, .pz .region, .pz .hole { transition: opacity 0.4s ease; }
+.pz.arriving .clue, .pz.arriving .cell, .pz.arriving .region, .pz.arriving .hole { opacity: 0; }
 @keyframes rise { from { opacity: 0; } to { opacity: 1; } }
 
 /* ---------- patch world: a tilted plate over a shaft of older layers ---------- */
@@ -306,7 +298,7 @@ button { font: inherit; color: inherit; }
 .world-cap { margin: 0; font: 500 12px/1 var(--mono); color: var(--sub); animation: rise 0.5s ease 0.3s both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pz.enter .clue, .pz.enter .cell, .pz.enter .cell::before, .pz.enter .cell::after, .pz.enter .thumb, .pz.enter .hole, .hole, .scene.enter .tile, .scene.enter .base, .layer .fresh, .world-cap, .lost-cap, .cell.hit.now .x { animation: none; }
+  .pz.enter, .pz .clue, .pz .cell, .pz .region, .pz .hole, .hole, .scene.enter .tile, .scene.enter .base, .layer .fresh, .world-cap, .lost-cap, .cell.hit.now .x { animation: none; }
   .layer .fresh { opacity: 0; }
   .cell.pull::before, .cell.pull::after { animation: none; transform: translate(calc(var(--dx) * var(--a1)), calc(var(--dy) * var(--a1))) rotate(var(--r1)) scale(var(--s1)); }
   .tilt, .wall { transition: none; }

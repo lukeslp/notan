@@ -23,6 +23,12 @@ function midZoom() {
 (async () => {
   // CHROMIUM_PATH points at a browser already on disk when Playwright's own build is missing.
   const b = await chromium.launch(process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {});
+  // The page's calm timings (pause 1800, move 2200, fade 400 ms) are checked
+  // once below; every other page runs shorter ones so the waits stay short.
+  const FAST = () => { window.__zoomTiming = { pause: 600, zoom: 1300, fade: 300 }; };
+  const rawNewPage = b.newPage.bind(b), rawNewContext = b.newContext.bind(b);
+  b.newPage = async (o) => { const p = await rawNewPage(o); await p.addInitScript(FAST); return p; };
+  b.newContext = async (o) => { const c = await rawNewContext(o); await c.addInitScript(FAST); return c; };
   const errs = [];
   let zooms = 0;
   for (const [vw, vh, tag] of [[1200, 860, 'desk'], [390, 800, 'phone']]) {
@@ -88,6 +94,14 @@ function midZoom() {
   await flowChecks(b, errs);
   await forcedChecks(b, errs);
   console.log('mid-zoom checks:', zooms);
+  {
+    const rawCtx = await rawNewContext({ viewport: { width: 390, height: 844 } });
+    const raw = await rawCtx.newPage();
+    await raw.goto((process.env.BASE || 'http://127.0.0.1:8765') + '/notan-zoom-lab/');
+    const t = await raw.evaluate(() => ZoomLab.timing());
+    if (!(t.pause >= 1500 && t.zoom >= 2000 && t.fade >= 300)) errs.push('calm timing defaults changed: ' + JSON.stringify(t));
+    await rawCtx.close();
+  }
   console.log('errors:', errs.length ? errs : 'none');
   await b.close();
   process.exitCode = errs.length || !zooms ? 1 : 0;
@@ -439,14 +453,14 @@ async function flowChecks(b, errs) {
   await pg.click('.tab[data-mode="merge"]');
   await pg.waitForTimeout(300);
   await keySolve('merge');
-  await pg.waitForTimeout(700 + 1400 + 500);
+  await pg.waitForTimeout(600 + 1300 + 300 + 500);
   const f = await pg.evaluate(() => { const a = document.activeElement; return { pz: a.classList.contains('pz') && !a.classList.contains('leaving'), tag: a.tagName }; });
   if (!f.pz) fail(`focus after a zoom is on ${f.tag}`);
   // Patch: the starter solved from the keyboard lands focus on a tile, and the plate is announced
   await pg.click('.tab[data-mode="patch"]');
   await pg.waitForTimeout(400);
   await keySolve('patch');
-  await pg.waitForTimeout(700 + 1400 + 1200);
+  await pg.waitForTimeout(600 + 1300 + 300 + 1200);
   const pf = await pg.evaluate(() => ({ tile: document.activeElement.classList.contains('tile'), live: document.getElementById('live').textContent }));
   if (!pf.tile || !/Pick a tile/.test(pf.live)) fail(`the plate took no focus or was not announced ${JSON.stringify(pf)}`);
   // arrows and X on a tab move along the tabs and leave the board alone
