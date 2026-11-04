@@ -93,6 +93,7 @@ function midZoom() {
   await fitChecks(b, errs);
   await flowChecks(b, errs);
   await forcedChecks(b, errs);
+  await rulesChecks(b, errs);
   console.log('mid-zoom checks:', zooms);
   {
     const rawCtx = await rawNewContext({ viewport: { width: 390, height: 844 } });
@@ -212,7 +213,10 @@ async function minesChecks(b, vw, vh, errs) {
   await pg.click('.pz .cell[data-i="5"]');
   await pg.waitForTimeout(120);
   let s = await st();
-  const c5 = await pg.evaluate(() => { const x = document.querySelector('.pz .cell[data-i="5"]'); return { hit: x.classList.contains('hit'), ink: x.classList.contains('ink'), x: !!x.querySelector('.x') }; });
+  const c5 = await pg.evaluate(() => { const x = document.querySelector('.pz .cell[data-i="5"]'); return { hit: x.classList.contains('hit'), ink: x.classList.contains('ink'), x: !!x.querySelector('.x'), boom: document.querySelectorAll('.pz .boom .flash').length }; });
+  if (c5.boom !== 1) fail(`a mine should go off with one flash, got ${c5.boom}`);
+  await pg.waitForTimeout(1500);
+  if (await pg.evaluate(() => document.querySelectorAll('.pz .boom').length)) fail('the detonation did not clear away');
   if (!c5.hit || c5.ink || !c5.x || !s.readout.includes('mines hit 1 of 3') || !(await live(pg)).startsWith('Mine at row')) fail(`a wrong fill did not hit a mine ${JSON.stringify(c5)} ${s.readout}`);
   // 2. Undo never takes back a mine: with only the mine down there is
   // nothing to undo, and the button says so where it can be seen;
@@ -343,7 +347,7 @@ async function minesChecks(b, vw, vh, errs) {
     const p = ZoomLab.state().chains.mines.cur;
     let missing = 0;
     for (let i = 0; i < p.sol.length; i++) if (p.sol[i] && p.given[i] < 0 && p.cells[i] !== 1) missing++;
-    return { lost: !!document.querySelector('.pz.lost'), answers: document.querySelectorAll('.pz .cell.answer').length, missing, cap: !!document.querySelector('.lost-cap p') && document.querySelector('.lost-cap p').offsetHeight > 0, btn: !!document.getElementById('another-btn') && document.getElementById('another-btn').offsetHeight > 0, undo: document.getElementById('undo-btn').getAttribute('aria-disabled'), clear: document.getElementById('reset-btn').getAttribute('aria-disabled'), readout: document.getElementById('readout').textContent };
+    return { lost: !!document.querySelector('.pz.lost'), answers: document.querySelectorAll('.pz .cell.answer').length, missing, cap: !!document.querySelector('.lost-cap') && !document.querySelector('.lost-cap p'), btn: !!document.getElementById('another-btn') && document.getElementById('another-btn').offsetHeight > 0, undo: document.getElementById('undo-btn').getAttribute('aria-disabled'), clear: document.getElementById('reset-btn').getAttribute('aria-disabled'), readout: document.getElementById('readout').textContent };
   });
   if (!lostLook.lost || lostLook.answers !== lostLook.missing || !lostLook.cap || !lostLook.btn || lostLook.undo !== 'true' || lostLook.clear !== 'true' || !lostLook.readout.endsWith('board lost')) fail(`lost board ${JSON.stringify(lostLook)}`);
   const before = await st();
@@ -393,7 +397,7 @@ async function fitChecks(b, errs) {
     await pg.evaluate(() => { const ch = ZoomLab.state().chains.patch; ZoomLab.advance('patch', ch); ch.view = 0; ZoomLab.render(); });
     const f = await pg.evaluate(() => {
       const vw = innerWidth, tabs = [...document.querySelectorAll('.tab')].map((t) => ({ r: t.getBoundingClientRect(), fits: t.scrollWidth <= t.clientWidth }));
-      const tbs = [...document.querySelectorAll('.bar .tb')].filter((t) => t.offsetParent).map((t) => ({ r: t.getBoundingClientRect(), l: t.querySelector('.tb-label') }));
+      const tbs = [...document.querySelectorAll('.bar .tb')].filter((t) => t.offsetParent).map((t) => ({ r: t.getBoundingClientRect(), l: t.querySelector('.tb-label'), title: t.title }));
       const overlap = tbs.some((a, i) => tbs.some((z, j) => i < j && a.r.left < z.r.right - 0.5 && z.r.left < a.r.right - 0.5 && a.r.top < z.r.bottom - 0.5 && z.r.top < a.r.bottom - 0.5));
       return {
         page: document.documentElement.scrollWidth <= vw,
@@ -401,7 +405,8 @@ async function fitChecks(b, errs) {
         tabsIn: tabs.every((t) => t.r.left >= 16 && t.r.right <= vw - 16 && t.r.width >= 24 && t.r.height >= 40 && t.fits),
         controls: tbs.length,
         big: tbs.every((t) => t.r.width >= 44 && t.r.height >= 44),
-        labels: tbs.every((t) => t.l.scrollWidth <= t.l.clientWidth + 0.5),
+        // icons only: each label is hidden on screen but kept as the name, with a tooltip
+        labels: tbs.every((t) => t.l && t.l.textContent.trim() && t.l.getBoundingClientRect().width <= 1 && t.title),
         overlap,
       };
     });
@@ -498,6 +503,47 @@ async function flowChecks(b, errs) {
 
 /* Forced colors (Windows High Contrast): the board must still show open
  * squares, your ink, marks, locked squares and a found mine. */
+async function rulesChecks(b, errs) {
+  const fail = (m) => errs.push(`rules: ${m}`);
+  const pg = await b.newPage({ viewport: { width: 390, height: 844 } });
+  pg.on('pageerror', (e) => errs.push('rules ' + e.message));
+  await pg.goto(BASE() + '?mode=merge');
+  await pg.evaluate(() => localStorage.clear());
+  await pg.reload();
+  await pg.waitForTimeout(300);
+  if (await pg.locator('#rules-btn').isVisible()) fail('the rules heart shows outside Mines');
+  await pg.goto(BASE() + '?mode=mines');
+  await pg.waitForTimeout(300);
+  const look = () => pg.evaluate(() => { const r = document.getElementById('rules-btn'), p = ZoomLab.state().chains.mines.cur; return { rule: r.dataset.rule, name: r.querySelector('.tb-label').textContent, title: r.title, svg: !!r.querySelector('svg'), limit: p.limit, saved: ZoomLab.state().minesRule }; });
+  let l = await look();
+  if (l.rule !== 'careful' || l.limit !== 3 || !l.svg || !/Careful/.test(l.name) || !l.title) fail(`default should be Careful, 3 ${JSON.stringify(l)}`);
+  const want = [['perfect', 1], ['relaxed', 5], ['careful', 3]];
+  for (const [rule, n] of want) {
+    await pg.click('#rules-btn');
+    l = await look();
+    if (l.rule !== rule || l.limit !== n || l.saved !== rule) fail(`press should give ${rule} ${n}: ${JSON.stringify(l)}`);
+  }
+  // a stricter rule never loses the board in play on the spot
+  await pg.evaluate(() => { const p = ZoomLab.state().chains.mines.cur; p.hits = 2; ZoomLab.render(); });
+  await pg.click('#rules-btn');
+  l = await look();
+  if (l.rule !== 'perfect' || l.limit !== 3) fail(`Perfect with 2 mines hit should wait for the next board ${JSON.stringify(l)}`);
+  await pg.close();
+  // reduced motion: no detonation, only the scorched square
+  const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, reducedMotion: 'reduce' });
+  const q = await ctx.newPage();
+  await q.goto(BASE() + '?mode=mines');
+  await q.evaluate(() => localStorage.clear());
+  await q.reload();
+  await q.waitForTimeout(300);
+  const i = await q.evaluate(() => { const p = ZoomLab.state().chains.mines.cur; for (let k = 0; k < p.sol.length; k++) if (!p.sol[k] && p.given[k] < 0) return k; return -1; });
+  await q.click(`.pz .cell[data-i="${i}"]`);
+  await q.waitForTimeout(60);
+  const r = await q.evaluate((k) => ({ boom: document.querySelectorAll('.boom').length, hit: document.querySelector(`.pz .cell[data-i="${k}"]`).classList.contains('hit') }), i);
+  if (r.boom || !r.hit) fail(`reduced motion should hit without the effect ${JSON.stringify(r)}`);
+  await ctx.close();
+}
+
 async function forcedChecks(b, errs) {
   const fail = (m) => errs.push(`forced colors: ${m}`);
   const ctx = await b.newContext({ viewport: { width: 390, height: 844 }, forcedColors: 'active' });

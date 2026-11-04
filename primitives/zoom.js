@@ -28,12 +28,12 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const MODES = {
-    merge: { name: 'Merge', blurb: 'Solve it. Each 2×2 merges into one cell and lands off center as gray squares, which count as filled.' },
-    pixel: { name: 'Pixel', blurb: 'Solve it. The whole board becomes the middle cell of the next board, and counts as filled.' },
-    hole: { name: 'Hole', blurb: 'Solve it and the board falls into the hole. Each square adds mass, the hole grows, and new pictures swirl in.' },
-    ring: { name: 'Ring', blurb: 'Each win adds a ring around the last board, which stays as gray squares that count as filled.' },
-    patch: { name: 'Patch', blurb: 'Eight boards around your last picture. Each one you solve locks the edges it shares. Solve all eight to zoom out.' },
-    mines: { name: 'Mines', blurb: 'Fill only what the numbers prove. A square that should stay empty is a mine. Three mines lose the board.' },
+    merge: { name: 'Merge', blurb: 'Each solve merges 2×2 into the next board.' },
+    pixel: { name: 'Pixel', blurb: 'Each solve becomes the middle square of the next.' },
+    hole: { name: 'Hole', blurb: 'Each solve falls in. The hole grows.' },
+    ring: { name: 'Ring', blurb: 'Each solve grows a ring around it.' },
+    patch: { name: 'Patch', blurb: 'Solve the eight tiles to zoom out.' },
+    mines: { name: 'Mines', blurb: 'Fill only what the numbers prove.' },
   };
   const ORDER = ['merge', 'pixel', 'hole', 'ring', 'patch', 'mines'];
   const WHERE = ['top left', 'top', 'top right', 'left', 'middle', 'right', 'bottom left', 'bottom', 'bottom right'];
@@ -823,6 +823,12 @@
    * only one or two lines to work on. Line logic only ever gains from what
    * you learn, so a careful player always has a square the numbers prove. */
   const MINES = { limit: 3, sizes: [5, 6, 7, 8], pool: ['blobs', 'strokes', 'terrain', 'scatter'] };
+  /* Rules (Mines only): how many mines lose a board. One heart icon cycles
+   * them, like difficulty icons: outline, half full, full and cracked. */
+  const RULES = { relaxed: 5, careful: 3, perfect: 1 }, RULE_ORDER = ['relaxed', 'careful', 'perfect'];
+  const RULE_NAME = { relaxed: 'Relaxed', careful: 'Careful', perfect: 'Perfect' };
+  function rule() { return RULES[S && S.minesRule] ? S.minesRule : 'careful'; }
+  function lim(p) { return (p && p.limit) || MINES.limit; }
   function minesSpec(N, gen) {
     return { gen, dens: 0.5, band: { solver: 'simple', most: N <= 6 ? 4 : 5, lines: 2, thin: 0, opening: 0.4, firstInk: 2, numbers: 3, pick: N === 5 ? 'easiest' : 'middle' } };
   }
@@ -830,6 +836,7 @@
     p.hit = new Uint8Array(p.w * p.h);
     p.hits = 0;
     p.lost = false;
+    p.limit = RULES[rule()];
     p.tries = p.tries || 0;
     return p;
   }
@@ -845,7 +852,7 @@
       if (p.given[i] >= 0 || p.hit[i] || p.cells[i] === v || (v === 1 && p.cells[i] === 0)) continue;
       if (v === 1 && !p.sol[i]) {
         p.hit[i] = 1; p.cells[i] = 0; p.hits++; out.hit = i;
-        if (p.hits >= MINES.limit) { p.lost = true; out.lost = true; }
+        if (p.hits >= lim(p)) { p.lost = true; out.lost = true; }
         break;
       }
       stroke.push([i, p.cells[i]]);
@@ -875,7 +882,8 @@
     if (!p || !p.sol) return;
     if (!(p.hit instanceof Uint8Array) || p.hit.length !== p.w * p.h) p.hit = new Uint8Array(p.w * p.h);
     p.hits = p.hit.reduce((a, v) => a + v, 0);
-    p.lost = p.hits >= MINES.limit;
+    p.limit = p.limit || MINES.limit;
+    p.lost = p.hits >= p.limit;
     p.tries = p.tries || 0;
   }
 
@@ -1088,6 +1096,7 @@
     el.setAttribute('role', 'grid');
     el.tabIndex = 0;
     el.setAttribute('aria-label', boardLabel(p));
+    el.setAttribute('aria-keyshortcuts', 'ArrowUp ArrowDown ArrowLeft ArrowRight Space X Z');
     // Keyboard focus shows the square cursor at once, so the board needs no ring.
     el.addEventListener('focus', () => {
       if (!keyNav || !view || view.el !== el) return;
@@ -1168,7 +1177,7 @@
     if (p.lost) showLost();
     if (hadFocus) el.focus({ preventScroll: true });
   }
-  function boardLabel(p) { return `${p.w} by ${p.h} board` + (p.hit ? `, mines hit ${p.hits} of ${MINES.limit}` : ''); }
+  function boardLabel(p) { return `${p.w} by ${p.h} board` + (p.hit ? `, mines hit ${p.hits} of ${lim(p)}` : ''); }
 
   /* The hole: its squares drawn as one hollow, inset like tiles only where
    * it meets the board and deepest at the middle. Every board that fell in
@@ -1250,6 +1259,12 @@
   const X_SVG = '<svg class="x" viewBox="0 0 10 10" aria-hidden="true" focusable="false"><path d="M2 2l6 6M8 2l-6 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none"/></svg>';
   const ANOTHER_SVG = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="7" width="13" height="13" rx="2"/><path d="M8 4h10a2 2 0 0 1 2 2v10"/></svg>';
   const LOST = 'This board is lost. Choose Another board.';
+  const HEART = 'M12 20.2s-7.2-4.5-7.2-10.1A4.1 4.1 0 0 1 12 7.4a4.1 4.1 0 0 1 7.2 2.7c0 5.6-7.2 10.1-7.2 10.1Z';
+  const RULE_SVG = {
+    relaxed: `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path d="${HEART}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+    careful: `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><clipPath id="heart-half"><rect width="12" height="24"/></clipPath><path d="${HEART}" fill="currentColor" clip-path="url(#heart-half)"/><path d="${HEART}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>`,
+    perfect: `<svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><path d="${HEART}" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/><path d="M12.6 7.8 10.9 11l2.4 1.7-1.9 3.6" fill="none" stroke="var(--bg)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>`,
+  };
 
   /* Screen-reader messages. Clearing first lets the same message be read again. */
   let sayT = 0;
@@ -1431,6 +1446,7 @@
       const x = view.cellEls[out.hit];
       x.classList.add('now');
       setTimeout(() => x.classList.remove('now'), 400);
+      if (!reduced) boom(out.hit);
       if (touch && navigator.vibrate) navigator.vibrate(30);
       view.el.setAttribute('aria-label', boardLabel(p));
     }
@@ -1439,13 +1455,42 @@
     if (out.hit >= 0) {
       const at = out.done ? `Filled ${out.done}, then a mine at ${where(p, out.hit)}.` : `Mine at ${where(p, out.hit)}.`;
       if (out.lost) {
-        say(`${at} Three mines: this board is lost. The answer is outlined. You stay at ${leadText(chain())}.`);
+        say(`${at} ${lim(p) === 1 ? 'One mine' : lim(p) + ' mines'}: this board is lost. The answer is outlined. You stay at ${leadText(chain())}.`);
         showLost(true);
         syncBar();
-      } else say(`${at}${out.done ? '' : ' It stays empty.'} Mines hit: ${p.hits} of ${MINES.limit}.`);
+      } else say(`${at}${out.done ? '' : ' It stays empty.'} Mines hit: ${p.hits} of ${lim(p)}.`);
       return;
     }
     if (out.solved) solved();
+  }
+
+  /* A mine going off: one short flash, shards and sparks thrown out, a puff
+   * of smoke and a small shake of the board; the square stays scorched.
+   * Only once per mine, nothing repeats. Reduced motion skips all of it
+   * and shows only the scorched square. */
+  function boom(i) {
+    const el = view.el, c = view.cellEls[i];
+    const fx = document.createElement('div');
+    fx.className = 'boom';
+    fx.setAttribute('aria-hidden', 'true');
+    fx.style.setProperty('--u', c.offsetWidth + 'px');
+    fx.style.left = (c.offsetLeft + c.offsetWidth / 2) + 'px';
+    fx.style.top = (c.offsetTop + c.offsetHeight / 2) + 'px';
+    const rnd = E.mulberry32((i * 7919 + view.p.hits * 31) | 0);
+    let html = '<i class="flash"></i>';
+    for (let k = 0; k < 8; k++) {
+      const a = (k / 8) * Math.PI * 2 + rnd() * 0.6, d = 0.7 + rnd() * 0.9;
+      html += `<i class="shard" style="--tx:${(Math.cos(a) * d).toFixed(2)};--ty:${(Math.sin(a) * d).toFixed(2)};--rot:${Math.round((rnd() - 0.5) * 540)}deg"></i>`;
+    }
+    for (let k = 0; k < 12; k++) {
+      const a = rnd() * Math.PI * 2, d = 0.9 + rnd() * 1.3;
+      html += `<i class="spark" style="--tx:${(Math.cos(a) * d).toFixed(2)};--ty:${(Math.sin(a) * d).toFixed(2)};--dl:${Math.round(rnd() * 60)}ms"></i>`;
+    }
+    for (let k = 0; k < 3; k++) html += `<i class="smoke" style="--tx:${((rnd() - 0.5) * 0.6).toFixed(2)};--dl:${80 + k * 90}ms"></i>`;
+    fx.innerHTML = html;
+    el.appendChild(fx);
+    el.animate([{ translate: '0 0' }, { translate: '-3px 1px' }, { translate: '3px -2px' }, { translate: '-2px 2px' }, { translate: '1px -1px' }, { translate: '0 0' }], { duration: 320, easing: 'ease-out' });
+    setTimeout(() => fx.remove(), 1400);
   }
 
   /* A lost board: the answer squares you had not filled are outlined, and
@@ -1461,15 +1506,13 @@
     stage.querySelectorAll('.lost-cap').forEach((n) => n.remove());
     const cap = document.createElement('div');
     cap.className = 'lost-cap';
-    const t = document.createElement('p');
-    t.textContent = `Three mines. The answer is outlined. You stay at ${leadText(chain())}.`;
     const b = document.createElement('button');
     b.type = 'button';
     b.className = 'tb';
     b.id = 'another-btn';
     b.innerHTML = ANOTHER_SVG + '<span class="tb-label">Another board</span>';
     b.addEventListener('click', anotherBoard);
-    cap.append(t, b);
+    cap.append(b);
     stage.appendChild(cap);
     if (fresh) lostAt = performance.now();
   }
@@ -1480,7 +1523,7 @@
     const p = retryMines(ch);
     save();
     render({ enter: true });
-    say(`New ${p.w} by ${p.h} board at ${leadText(ch)}. Mines hit: 0 of ${MINES.limit}.`);
+    say(`New ${p.w} by ${p.h} board at ${leadText(ch)}. Mines hit: 0 of ${lim(p)}.`);
   }
 
   /* pointer. A mouse acts at once: left does what the tool says, right the
@@ -1976,10 +2019,10 @@
     return `zoom ${ch.depth - 1}`;
   }
   const KEYS = {
-    fill: 'Tap fills · hold or right-click marks empty · drag paints · arrows, Space, X, Z',
-    mark: 'Tap marks empty · hold or right-click fills · drag paints · arrows, Space, X, Z',
-    minesFill: 'Tap fills · hold or right-click marks (never checked) · drag fills a line · arrows, Space, X, Z',
-    minesMark: 'Tap or hold marks (never checked) · right-click fills · drag marks a line · arrows, Space, X, Z',
+    fill: 'Tap fills · hold marks',
+    mark: 'Tap marks · hold fills',
+    minesFill: 'Tap fills · hold marks',
+    minesMark: 'Tap or hold marks',
   };
 
   function hud() {
@@ -1987,19 +2030,25 @@
     document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.mode === S.mode)));
     $('blurb').textContent = MODES[S.mode].blurb;
     const size = cur.kind === 'world' ? (ch.view === 'world' ? '15×15 picture' : `${WHERE[ch.view]} tile`) : `${cur.w}×${cur.h}`;
-    $('readout').textContent = `${leadText(ch)} · ${size}` + (!mines ? '' : cur.lost ? ' · board lost' : ` · mines hit ${cur.hits} of ${MINES.limit}`);
+    $('readout').textContent = `${leadText(ch)} · ${size}` + (!mines ? '' : cur.lost ? ' · board lost' : ` · mines hit ${cur.hits} of ${lim(cur)}`);
     // The tool says what a tap does; its label changes, so no aria-pressed.
     const tb = $('tool-btn');
     tb.dataset.tool = fill ? 'fill' : 'mark';
     tb.querySelector('.tb-label').textContent = fill ? 'Filling' : 'Marking';
-    tb.title = fill ? 'Tap or click fills a square. Press to mark squares empty instead.' : 'Tap or click marks a square empty. Press to fill instead.';
+    tb.title = fill ? 'Filling: a tap fills. Press to mark instead.' : 'Marking: a tap marks empty. Press to fill instead.';
     const plate = onPlate(), rb = $('reset-btn');
     rb.querySelector('.tb-label').textContent = plate ? 'Clear tiles' : 'Clear board';
-    rb.title = plate ? 'Clear your marks on every open tile. Undo brings them back.' : mines ? 'Clear your fills and marks on this board. Found mines stay.' : 'Clear your marks on this board. Undo brings them back.';
+    rb.title = plate ? 'Clear every open tile (Undo brings them back)' : mines ? 'Clear this board (found mines stay)' : 'Clear this board (Undo brings it back)';
     $('undo-btn').title = mines ? 'Undo your last fill or mark (Z). Found mines stay.' : 'Undo your last move (Z)';
-    $('new-btn').title = `Start ${name} over with new pictures. Asks first if you have progress.`;
+    $('new-btn').title = `New game: all of ${name} starts over`;
     if (!$('keys').classList.contains('note')) $('keys-text').textContent = mines ? (fill ? KEYS.minesFill : KEYS.minesMark) : (fill ? KEYS.fill : KEYS.mark);
     $('back-btn').hidden = !(cur.kind === 'world' && ch.view !== 'world');
+    const rb2 = $('rules-btn'), r = rule(), n = RULES[r];
+    rb2.hidden = S.mode !== 'mines';
+    if (rb2.dataset.rule !== r) { rb2.dataset.rule = r; rb2.querySelector('.rb-icon').innerHTML = RULE_SVG[r]; }
+    const nxt = RULE_ORDER[(RULE_ORDER.indexOf(r) + 1) % RULE_ORDER.length];
+    rb2.querySelector('.tb-label').textContent = `Rules: ${RULE_NAME[r]}, ${n === 1 ? 'one mine loses' : n + ' mines lose'} a board`;
+    rb2.title = `${RULE_NAME[r]}: ${n === 1 ? 'one mine loses' : n + ' mines lose'} a board. Press for ${RULE_NAME[nxt]}.`;
     syncBar();
   }
 
@@ -2010,7 +2059,7 @@
     let t = `New ${p.w} by ${p.h} board.`;
     if (p.thumbAt != null) t += ' The middle square is your last board and counts as filled.';
     else if (ink + empty) t += ` Carried over and locked: ${ink} filled, ${empty} empty.`;
-    if (p.hit) t += ` Mines hit: 0 of ${MINES.limit}.`;
+    if (p.hit) t += ` Mines hit: 0 of ${lim(p)}.`;
     return t;
   }
 
@@ -2152,7 +2201,7 @@
     const st = [];
     for (let i = 0; i < view.p.cells.length; i++) if (view.p.cells[i] !== -1) setCell(i, -1, st);
     endStroke(st);
-    say(view.p.hit ? `Board cleared. Mines you found stay. Mines hit: ${view.p.hits} of ${MINES.limit}.` : 'Board cleared. Undo brings your marks back.');
+    say(view.p.hit ? `Board cleared. Mines you found stay. Mines hit: ${view.p.hits} of ${lim(view.p)}.` : 'Board cleared. Undo brings your marks back.');
   }
 
   /* New game starts this tab over. When there is something to lose it asks
@@ -2280,6 +2329,16 @@
     // its square cursor when a keyboard brings focus to it.
     addEventListener('keydown', () => { keyNav = true; }, true);
     addEventListener('pointerdown', () => { keyNav = false; }, true);
+    $('rules-btn').addEventListener('click', () => {
+      if (busy) return;
+      const r = RULE_ORDER[(RULE_ORDER.indexOf(rule()) + 1) % RULE_ORDER.length], n = RULES[r];
+      S.minesRule = r;
+      // The board in play takes the new rule unless that would lose it at once.
+      const p = chain().cur, now = p && p.hit && !p.lost && p.hits < n;
+      if (now) { p.limit = n; if (view && view.p === p) view.el.setAttribute('aria-label', boardLabel(p)); }
+      save(); hud();
+      say(`${RULE_NAME[r]}: ${n === 1 ? 'one mine loses' : n + ' mines lose'} a board${now || !(p && p.hit) ? '' : ', from the next board'}.`);
+    });
     $('tool-btn').addEventListener('click', () => {
       S.tool = S.tool ? 0 : 1; save(); hud();
       say(S.tool ? 'Filling. A tap fills a square.' : 'Marking. A tap marks a square empty.');
