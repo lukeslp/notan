@@ -1,0 +1,351 @@
+/* Notan Zoom lab. Notan's mono palette and type; the board is the page. */
+@font-face { font-family: "Plex Mono"; font-weight: 500; font-display: swap; src: url("./fonts/IBMPlexMono-500.woff2") format("woff2"); }
+@font-face { font-family: "Plex Sans"; font-weight: 400; font-display: swap; src: url("./fonts/IBMPlexSans-400.woff2") format("woff2"); }
+
+:root {
+  color-scheme: light;
+  --bg: #ffffff;
+  --ink: #000000;
+  --text: #111111;
+  --sub: #474747;
+  --done: #a3a3a3;
+  --line: #d4d4d4;
+  --frame: #1c1c1c;
+  --mark: #5a5a5a;
+  --band: rgba(0, 0, 0, 0.05);
+  --held: #6f6f6f;
+  --tile: #e2e2e2;
+  --tile-hi: #cfcfcf;
+  --sunk: #f6f6f6;
+  --well: #d3d3d3;
+  --wall: #bdbdbd;
+  --void: #9c9c9c;
+  --lift: 0 1px 0 rgba(0, 0, 0, 0.3), 0 7px 12px -6px rgba(0, 0, 0, 0.6);
+  --press: inset 0 1px 3px rgba(0, 0, 0, 0.45);
+  --wellsh: inset 0 2px 8px rgba(0, 0, 0, 0.22);
+  --shadow: rgba(0, 0, 0, 0.45);
+  --tile-drop: 0 6px 10px rgba(0, 0, 0, 0.18);
+  --rise: -1px;
+  --mono: "Plex Mono", "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --sans: "Plex Sans", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #000000; --ink: #ffffff; --text: #f2f2f2; --sub: #b8b8b8; --done: #5c5c5c;
+    --line: #2f2f2f; --frame: #e4e4e4; --mark: #9a9a9a; --band: rgba(255, 255, 255, 0.08); --held: #8a8a8a;
+  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #121212; --wall: #1c1c1c; --void: #000000;
+  --lift: 0 8px 14px -8px rgba(255, 255, 255, 0.3);
+  --press: inset 0 1px 3px rgba(0, 0, 0, 0.75);
+  --wellsh: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 3px 10px rgba(0, 0, 0, 0.9);
+  --shadow: rgba(255, 255, 255, 0.28);
+  --tile-drop: 0 6px 12px rgba(255, 255, 255, 0.08);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #000000; --ink: #ffffff; --text: #f2f2f2; --sub: #b8b8b8; --done: #5c5c5c;
+  --line: #2f2f2f; --frame: #e4e4e4; --mark: #9a9a9a; --band: rgba(255, 255, 255, 0.08); --held: #8a8a8a;
+  --tile: #262626; --tile-hi: #353535; --sunk: #101010; --well: #121212; --wall: #1c1c1c; --void: #000000;
+  --lift: 0 8px 14px -8px rgba(255, 255, 255, 0.3);
+  --press: inset 0 1px 3px rgba(0, 0, 0, 0.75);
+  --wellsh: inset 0 0 0 1px rgba(255, 255, 255, 0.07), inset 0 3px 10px rgba(0, 0, 0, 0.9);
+  --shadow: rgba(255, 255, 255, 0.28);
+  --tile-drop: 0 6px 12px rgba(255, 255, 255, 0.08);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); -webkit-tap-highlight-color: transparent; }
+/* No page zoom. touch-action is intersected across every ancestor, so
+   pan-x pan-y on the root stops double-tap and pinch zoom page-wide (the
+   readout, gaps between buttons, the space around a board or plate); the
+   board's own none still wins inside it. Unlike the other games
+   (docs/double-tap-zoom-20261011.md), pinch is off too: a pinch here could
+   leave the board filling the screen with no way back. iOS Safari also needs
+   the gesture events canceled in zoom.js. */
+html, body { touch-action: pan-x pan-y; }
+button { font: inherit; color: inherit; }
+.sr-only { position: absolute !important; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+.app {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: max(8px, env(safe-area-inset-top, 0px)) max(8px, env(safe-area-inset-bottom, 0px));
+}
+.top, .bar, .keys { position: relative; z-index: 3; background: var(--bg); }
+.top { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+/* Six tabs on one row down to 300px wide; below that, a 3 by 2 grid. */
+.tabs { display: flex; justify-content: center; gap: 2px; max-width: 100%; }
+.tab {
+  appearance: none; border: 0; border-radius: 0; background: none; cursor: pointer;
+  min-height: 44px; min-width: 44px; padding: 0 12px;
+  font: 500 13px/1 var(--mono); letter-spacing: 0.02em; color: var(--sub);
+  white-space: nowrap; touch-action: manipulation;
+}
+.tab[aria-pressed="true"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--ink); }
+@media (hover: hover) and (pointer: fine) { .tab:hover { color: var(--text); } }
+:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+.blurb { margin: 0; max-width: 46ch; text-align: center; font-size: 13px; line-height: 1.4; color: var(--sub); text-wrap: balance; min-height: 2.8em; }
+.readout { margin: 0; font: 500 12px/1 var(--mono); color: var(--sub); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+
+.stage { flex: 1; min-height: 0; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; overflow: hidden; }
+/* While the camera moves, the play area's top and bottom edges go soft. */
+.keys { margin: 0; text-align: center; font-size: 11px; color: var(--sub); text-wrap: balance; }
+/* a short message after a press that changes nothing on the board */
+.keys.note { color: var(--text); }
+.keys .opt { white-space: nowrap; cursor: pointer; padding-left: 0.5em; }
+.keys .opt input { accent-color: var(--ink); width: 13px; height: 13px; margin: 0 4px 0 0; vertical-align: -2px; cursor: pointer; }
+
+/* ---------- the bar ----------
+ * Every control is an icon over a visible label that says how far it
+ * reaches: Clear board (this board), New game (this tab). Columns are equal
+ * and the height is fixed, so nothing jumps. New game asks first, in the
+ * bar, when there is progress to lose. */
+.bar { padding-top: 4px; }
+/* .tb sets display: flex, which would otherwise beat [hidden] */
+.bar [hidden] { display: none !important; }
+.bar-main { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(44px, 84px); justify-content: center; min-height: 60px; }
+.tb {
+  appearance: none; border: 0; border-radius: 0; background: none; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; gap: 2px;
+  min-width: 44px; min-height: 44px; padding: 5px 2px 3px;
+  font: 500 11px/1.15 var(--mono); letter-spacing: 0.02em; color: var(--sub);
+  touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+}
+.tb svg { width: 24px; height: 24px; flex: none; }
+.tb-label { max-width: 100%; text-align: center; text-wrap: balance; }
+@media (hover: hover) and (pointer: fine) { .tb:not([aria-disabled="true"]):hover { color: var(--text); background: var(--band); } }
+.tb:not([aria-disabled="true"]):active { color: var(--text); background: var(--band); }
+.tb[aria-disabled="true"] { color: var(--done); cursor: default; }
+#tool-btn[data-tool="mark"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--ink); }
+#tool-btn[data-tool="mark"] .m-fill, #tool-btn[data-tool="fill"] .m-dot { display: none; }
+.bar .tb:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.bar-ask { display: grid; grid-template-columns: minmax(0, 1fr) 56px 56px; gap: 4px; align-items: stretch; min-height: 60px; }
+.ask-text { margin: 0; align-self: center; padding-inline-start: 4px; font: 400 13px/1.3 var(--sans); color: var(--text); text-wrap: balance; }
+/* Keep playing, the safe choice, is drawn stronger; New game stays plain. */
+.bar-ask .tb { color: var(--text); }
+#ask-no { box-shadow: inset 0 0 0 1.5px var(--ink); }
+.bar .bar-ask .tb:focus-visible { outline-offset: 2px; }
+/* room between the two choices, so a near miss lands on neither */
+.bar-ask .tb + .tb { margin-inline-start: 8px; }
+
+/* ---------- board ----------
+ * No grid lines. Every square is a tile on the page, inset from its cell:
+ * open squares are faint tiles flush with the page, your ink is raised
+ * and casts a shadow, a square marked empty sinks, and the picture
+ * carried over from the last solve sits recessed in a well, a layer
+ * below. Each zoom pushes the past one layer down. */
+.pz { display: grid; position: relative; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; }
+.clue { display: flex; font: 500 var(--f)/1.15 var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }
+.clue span { transition: color 0.25s; }
+.clue span.done { color: var(--done); }
+.cc { flex-direction: column; justify-content: flex-end; align-items: center; padding-bottom: calc(var(--f) * 0.45); }
+.rc { justify-content: flex-end; align-items: center; gap: 0.5em; padding-right: calc(var(--f) * 0.6); }
+
+.pz-bg { position: absolute; z-index: 0; background: var(--bg); border-radius: calc(var(--r) * 1.6); transition: background-color 0.45s ease, box-shadow 0.45s ease; pointer-events: none; }
+.pz:focus, .pz:focus-visible { outline: none; }
+/* The board and the Patch tiles draw a focus ring only with "Focus outline" on.
+   Without it a keyboard player still sees the square cursor on the board
+   (shown as soon as the board takes keyboard focus) and a lifted tile on the plate. */
+:root[data-focus-ring] .pz:focus-visible { outline: 2px solid var(--ink); outline-offset: 6px; border-radius: 4px; }
+.cell { position: relative; z-index: 1; cursor: pointer; }
+.cell::before {
+  content: "";
+  position: absolute;
+  inset: var(--in);
+  border-radius: var(--r);
+  background: var(--tile);
+  transition: background-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+/* groups of five get a slightly wider seam instead of a heavier line */
+.cell.g5r::before { right: calc(var(--in) + var(--seam)); }
+.cell.g5l::before { left: calc(var(--in) + var(--seam)); }
+.cell.g5b::before { bottom: calc(var(--in) + var(--seam)); }
+.cell.g5t::before { top: calc(var(--in) + var(--seam)); }
+@media (hover: hover) { .cell:not(.given):not(.ink):hover::before { background: var(--tile-hi); } }
+.cell.ink::before { background: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
+.cell.mark::before { background: var(--sunk); box-shadow: var(--press); }
+.cell.mark::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--mark); }
+.cell.given { cursor: default; }
+/* Locked squares, carried over from the last solve or given as a nudge,
+ * are pressed into the page: gray, no lift. Locked empty squares leave a
+ * gap in the well. */
+.cell.given::before { background: transparent; }
+.cell.given.ink::before { background: var(--held); box-shadow: var(--press); transform: none; }
+/* A locked filled square in a row or column run that your own ink joins lights
+   up to ink, still pressed, so the run reads as one block. */
+.cell.given.ink.joined::before { background: var(--ink); }
+.cell .thumb { position: absolute; left: var(--in); top: var(--in); border-radius: var(--r); }
+/* Pixel's middle square counts as one filled square: a solid frame says so. */
+.cell.has-thumb::after { content: ""; position: absolute; z-index: 1; inset: var(--in); border-radius: var(--r); box-shadow: inset 0 0 0 2px var(--held); background: none; width: auto; height: auto; transform: none; }
+.region { position: absolute; z-index: 0; border-radius: calc(var(--r) * 1.6); background: var(--well); box-shadow: var(--wellsh); pointer-events: none; }
+/* The hole lies over its own locked squares and takes no clicks. */
+.hole { position: absolute; z-index: 1; pointer-events: none; }
+.pz.enter .hole { animation: rise 0.9s ease 1.0s both; }
+.cursor { position: absolute; z-index: 2; width: var(--cell); height: var(--cell); border-radius: calc(var(--r) + 2px); box-shadow: 0 0 0 2px var(--ink); pointer-events: none; display: none; }
+.cursor.on { display: block; }
+/* Solved: the board sinks into one well and only the picture stays, which
+ * is exactly how it will sit in the next board when the camera lands. */
+.pz.solved .pz-bg { background: var(--well); box-shadow: var(--wellsh); }
+.pz.solved .region { opacity: 0; transition: opacity 0.45s ease; }
+.pz.solved .cell:not(.ink):not(.given)::before { opacity: 0; transition: opacity 0.4s ease; }
+.pz.solved .cell.mark::after, .pz.solved .cell.given:not(.ink)::after { opacity: 0; transition: opacity 0.4s ease; }
+.pz.solved .clue span { color: var(--done); }
+.pz.solved .cursor { display: none; }
+
+/* ---------- mines ----------
+ * A found mine: a sunk tile like a mark, a dashed outline and a cross, so
+ * it reads without hue (and the cross, drawn in currentColor, survives
+ * forced colors). A pick you are holding shows an inset ring before it
+ * counts. A lost board outlines the answer squares you had not filled. */
+.cell.hit { cursor: default; }
+.cell.hit::before { background: var(--sunk); box-shadow: var(--press); outline: 1.5px dashed var(--ink); outline-offset: -2px; }
+.cell .x { position: absolute; z-index: 1; left: 50%; top: 50%; width: 46%; height: 46%; transform: translate(-50%, -50%); color: var(--ink); pointer-events: none; }
+.cell.hit.now .x { animation: pop 0.18s ease-out both; }
+@keyframes pop { from { transform: translate(-50%, -50%) scale(0.6); } to { transform: translate(-50%, -50%) scale(1); } }
+.pz.solved .cell.hit .x { opacity: 0; transition: opacity 0.4s ease; }
+.cell.pend::before { box-shadow: inset 0 0 0 2px var(--ink); background: var(--tile-hi); transform: none; }
+.cell.pm::after { content: ""; position: absolute; left: 50%; top: 50%; width: 4px; height: 4px; margin: -2px 0 0 -2px; border-radius: 50%; background: var(--mark); }
+.pz.lost .cell { cursor: default; }
+.pz.lost .cell:not(.ink):not(.given):not(.hit):not(.answer)::before { opacity: 0.35; }
+.pz.lost .cell.answer::before { background: transparent; box-shadow: inset 0 0 0 2px var(--ink); transform: none; }
+.pz.lost .cell.mark:not(.answer)::after { opacity: 0; }
+.lost-cap { display: flex; flex-direction: column; align-items: center; gap: 8px; animation: rise 0.5s ease 0.3s both; }
+.lost-cap p { margin: 0; max-width: 34ch; text-align: center; font: 500 12px/1.4 var(--mono); color: var(--sub); }
+.lost-cap .tb { flex-direction: row; gap: 6px; padding: 0 14px; font-size: 13px; color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.lost-cap .tb:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+
+/* Camera moves. The old view is lifted out and rides above the new one;
+ * its numbers go first so only the picture travels. The new view's fresh
+ * squares and numbers come up while the camera is still moving. */
+/* No will-change: a layer promoted ahead of time is painted once at its
+   resting size and then stretched, so a board flying in at 2 to 5 times
+   size looked soft until it landed. While the camera moves, shadows are
+   dropped (scaled up they smear) and come back as it lands. */
+.stage.zooming .cell::before { box-shadow: none; }
+.leaving { z-index: 2; pointer-events: none; }
+.leaving .clue { opacity: 0; transition: opacity 0.35s ease; }
+.leaving .cursor { display: none; }
+/* The new board's open squares and numbers come up as the camera lands, not
+   mid-flight, where they showed as large faint blocks. */
+.pz.enter .clue, .pz.enter .cell:not(.given) { animation: rise 0.5s ease 1.05s both; }
+/* The carried-over picture lands raised at full ink, then sinks into the well. */
+.pz.enter .cell.given.ink.fresh::before { animation: settle 0.9s ease 1.25s both; }
+.pz.enter .cell .thumb, .pz.enter .cell.given::after { animation: rise 0.9s ease 1.0s both; }
+@keyframes settle {
+  from { background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
+  to { background-color: var(--held); box-shadow: var(--press); transform: none; }
+}
+@keyframes rise { from { opacity: 0; } to { opacity: 1; } }
+
+/* ---------- patch world: a tilted plate over a shaft of older layers ---------- */
+.scene { position: relative; flex: none; perspective: 1700px; perspective-origin: 50% 50%; transition: perspective 0.48s cubic-bezier(.4,0,.2,1); }
+/* Level, the scene is seen straight on with no perspective, so the shaft
+ * collapses and the layer below fills the window exactly; tilting brings
+ * the perspective back with it. */
+.scene.flat { perspective: 40000px; }
+.scene.instant { transition: none; }
+.base { position: absolute; inset: 0; pointer-events: none; }
+.scene.enter .base { animation: rise 0.8s ease 0.3s both; }
+.base canvas { display: block; }
+.tilt, .stack { position: absolute; inset: 0; transform-style: preserve-3d; }
+/* Only the tiles take clicks: the plate behind them is coplanar, and in 3D
+ * hit-testing it can win a tie and swallow a click on the lower row. */
+.tilt { pointer-events: none; }
+.tile { pointer-events: auto; }
+.tilt { transform: rotateX(var(--tilt)); transition: transform 0.48s cubic-bezier(.4,0,.2,1); }
+.scene.flat .tilt { transform: none; }
+.scene.instant .tilt { transition: none; }
+.layer { position: absolute; pointer-events: none; }
+.layer canvas { position: absolute; inset: 0; }
+.layer .fresh { animation: fade-out 0.9s ease 1.3s both; }
+@keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
+.wall { position: absolute; pointer-events: none; background: var(--wall); backface-visibility: visible; transition: opacity 0.48s ease; }
+/* Level, the walls are edge-on: hide them, and let them grow in with the tilt. */
+.scene.flat .wall { opacity: 0; }
+.scene.instant .wall { transition: none; }
+.wall.top { background: linear-gradient(to bottom, var(--wall), var(--well)); }
+.wall.left, .wall.right { background: linear-gradient(to right, var(--wall), var(--well)); filter: brightness(0.94); }
+.wall.bottom { filter: brightness(0.85); }
+/* The plate is one flat plane (base and tiles together), so nothing in it
+ * can lose a depth tie to anything else. */
+.world { position: absolute; inset: 0; display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: var(--wgap); transform-style: flat; }
+.tile { appearance: none; border: 0; padding: 0; background: none; cursor: pointer; display: block; position: relative; border-radius: var(--wr); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.tile canvas { display: block; }
+.tile.center { cursor: default; pointer-events: none; }
+.tile.done { cursor: default; }
+@media (hover: hover) { .tile:not(:disabled):hover { transform: translateY(-3px); box-shadow: var(--tile-drop); } }
+.tile:focus-visible { outline: none; transform: translateY(-3px); box-shadow: var(--tile-drop); }
+:root[data-focus-ring] .tile:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+@media (forced-colors: active) { .tile:focus-visible { outline: 2px solid Highlight; } }
+.scene.enter .tile:not(.center) { animation: rise 0.8s ease 0.6s both; }
+.world-cap { margin: 0; font: 500 12px/1 var(--mono); color: var(--sub); animation: rise 0.5s ease 0.3s both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pz.enter .clue, .pz.enter .cell, .pz.enter .cell::before, .pz.enter .cell::after, .pz.enter .thumb, .pz.enter .hole, .scene.enter .tile, .scene.enter .base, .layer .fresh, .world-cap, .lost-cap, .cell.hit.now .x { animation: none; }
+  .layer .fresh { opacity: 0; }
+  .tilt, .wall { transition: none; }
+  .cell::before, .tile { transition: none; }
+}
+
+@media (max-width: 440px) { .tab { padding: 0 6px; } .tabs { gap: 1px; } }
+/* 320 to 360: six columns need 52px each. Borrow 12px of each 16px gutter
+   (4px still clear of the edge) and drop letter-spacing, so "Filling" fits
+   on one line. */
+@media (max-width: 360px) {
+  .bar { margin-inline: -12px; }
+  .tb { padding-inline: 0; letter-spacing: 0; }
+  .tab { padding: 0 4px; font-size: 12px; letter-spacing: 0; }
+}
+@media (max-width: 299px) { .tabs { display: grid; grid-template-columns: repeat(3, 1fr); width: 100%; } }
+/* desktop and tablet: icon beside label, one row */
+@media (min-width: 768px) and (min-height: 481px) {
+  .bar-main { display: flex; justify-content: center; gap: 4px; min-height: 44px; }
+  .tb { flex-direction: row; justify-content: center; align-items: center; gap: 6px; padding: 0 12px; font-size: 13px; line-height: 1; }
+  .tb-label { white-space: nowrap; }
+  #back-btn, #back-btn[hidden] + #new-btn { margin-inline-start: 16px; }
+  .bar-ask { display: flex; justify-content: center; align-items: center; gap: 8px; min-height: 44px; }
+  .ask-text { max-width: 40ch; }
+  .bar-ask .tb + .tb { margin-inline-start: 24px; }
+}
+/* short landscape phones: a compact one-row bar, so the board keeps its height */
+@media (max-height: 480px) and (min-width: 560px) {
+  .bar-main { display: flex; justify-content: center; gap: 2px; min-height: 44px; }
+  .tb { flex-direction: row; justify-content: center; align-items: center; gap: 4px; padding: 0 6px; line-height: 1; }
+  .tb svg { width: 20px; height: 20px; }
+  .tb-label { white-space: nowrap; }
+  .bar-ask { display: flex; justify-content: center; align-items: center; gap: 6px; min-height: 44px; }
+  .ask-text { max-width: 26ch; }
+  .bar-ask .tb + .tb { margin-inline-start: 24px; }
+}
+/* Forced colors (Windows High Contrast) drop backgrounds and shadows, and
+ * every square here is drawn with them. So the board draws itself in system
+ * colors: open squares outlined, your ink solid, a mark a dot, a locked
+ * filled square hatched with a double edge, a locked empty square a dash,
+ * a found mine a dashed square with a cross. */
+@media (forced-colors: active) {
+  .tab[aria-pressed="true"], #tool-btn[data-tool="mark"] { box-shadow: none; border-bottom: 2px solid CanvasText; }
+  #ask-no { box-shadow: none; border: 2px solid ButtonText; }
+  .tb[aria-disabled="true"] { color: GrayText; }
+  .pz .cell { forced-color-adjust: none; }
+  .pz .cell::before { background: Canvas; border: 1px solid CanvasText; box-shadow: none; transform: none; }
+  .pz .cell.ink::before { background: CanvasText; }
+  .pz .cell.mark::before { background: Canvas; }
+  .pz .cell.mark::after, .pz .cell.pm::after { background: CanvasText; }
+  .pz .cell.given::before { border-color: transparent; }
+  .pz .cell.given.ink::before { background: repeating-linear-gradient(45deg, CanvasText 0 1.5px, Canvas 1.5px 4px); border: 3px double CanvasText; }
+  /* only here does a locked empty square get a dash: system colors draw no well */
+  .pz .cell.given:not(.ink)::after { content: ""; position: absolute; left: 50%; top: 50%; width: 32%; height: 2px; transform: translate(-50%, -50%); border-radius: 1px; background: CanvasText; }
+  .pz .cell.hit::before { background: Canvas; outline: 1.5px dashed CanvasText; outline-offset: -3px; border-color: transparent; }
+  .pz .cell .x { color: CanvasText; }
+  .pz .cell.pend::before { background: Canvas; border: 3px solid Highlight; }
+  .pz.lost .cell.answer::before { background: Canvas; border: 3px solid CanvasText; }
+  .pz.solved .cell:not(.ink):not(.given)::before { border-color: transparent; }
+  .cell.has-thumb::after { box-shadow: none; border: 2px solid CanvasText; }
+  .cursor { box-shadow: none; outline: 2px solid Highlight; }
+  .clue span.done { forced-color-adjust: none; color: GrayText; }
+  .region { box-shadow: none; border: 1px solid GrayText; }
+}

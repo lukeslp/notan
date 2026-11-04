@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="robots" content="noindex, nofollow">
+<title>Nonogram Primitives</title>
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="./zoom.css?v=25a602e2">
+<meta name="description" content="User interface experiments dressed up as games.">
+<meta property="og:title" content="Nonogram Primitives">
+<meta property="og:description" content="User interface experiments dressed up as games.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://lukesteuber.com/games/notan-zoom/">
+<meta property="og:image" content="https://lukesteuber.com/games/social/notan-zoom-8330f344818d.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:alt" content="Four phone screenshots of black and white nonogram boards: an 8×8 board with its last picture set off to one side, a board with a hollow void in the middle ringed by ink, a lopsided ring of squares around an older board, and a tilted plate of small tiles.">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Nonogram Primitives">
+<meta name="twitter:description" content="User interface experiments dressed up as games.">
+<meta name="twitter:image" content="https://lukesteuber.com/games/social/notan-zoom-8330f344818d.png">
+<meta name="twitter:image:alt" content="Four phone screenshots of black and white nonogram boards: an 8×8 board with its last picture set off to one side, a board with a hollow void in the middle ringed by ink, a lopsided ring of squares around an older board, and a tilted plate of small tiles.">
+<script data-goatcounter="https://stats.dr.eamer.dev/count" async src="https://stats.dr.eamer.dev/count.js"></script>
+</head>
+<body>
+<main class="app">
+  <header class="top">
+    <nav class="tabs" aria-label="Way to zoom out">
+      <button type="button" class="tab" data-mode="merge" aria-pressed="true">Merge</button>
+      <button type="button" class="tab" data-mode="pixel" aria-pressed="false">Pixel</button>
+      <button type="button" class="tab" data-mode="hole" aria-pressed="false">Hole</button>
+      <button type="button" class="tab" data-mode="ring" aria-pressed="false">Ring</button>
+      <button type="button" class="tab" data-mode="patch" aria-pressed="false">Patch</button>
+      <button type="button" class="tab" data-mode="mines" aria-pressed="false">Mines</button>
+    </nav>
+    <p class="blurb" id="blurb"></p>
+    <p class="readout" id="readout"></p>
+  </header>
+  <section class="stage" id="stage" aria-label="Board"></section>
+  <footer class="bar" id="bar">
+    <div class="bar-main" id="bar-main">
+      <button type="button" class="tb" id="undo-btn" aria-disabled="true" aria-keyshortcuts="Z" title="Undo your last move (Z)"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M9 14 4 9l5-5"/><path d="M4 9h9.5a6.5 6.5 0 1 1 0 13H11"/></svg><span class="tb-label">Undo</span></button>
+      <button type="button" class="tb" id="tool-btn" data-tool="fill" title="Tap or click fills a square. Press to mark squares empty instead."><svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false"><rect x="4.5" y="4.5" width="15" height="15" rx="2.5" fill="none" stroke="currentColor" stroke-width="1.6"/><rect class="m-fill" x="8" y="8" width="8" height="8" rx="1.2" fill="currentColor"/><circle class="m-dot" cx="12" cy="12" r="2" fill="currentColor"/></svg><span class="tb-label">Filling</span></button>
+      <button type="button" class="tb" id="reset-btn" aria-disabled="true" title="Clear your marks on this board. Undo brings them back."><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M13 3.5 20.5 11l-9 9L4 12.5Z"/><path d="M4 12.5 7.6 8.9l7.5 7.5-3.6 3.6Z" fill="currentColor"/><path d="M11.5 20H20"/></svg><span class="tb-label">Clear board</span></button>
+      <button type="button" class="tb" id="back-btn" hidden title="Back to all eight tiles. Your marks here are kept."><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="17" height="17" rx="2"/><path d="M9.17 3.5v17M14.83 3.5v17M3.5 9.17h17M3.5 14.83h17"/><rect x="9.17" y="9.17" width="5.66" height="5.66" fill="currentColor" stroke="none"/></svg><span class="tb-label">All tiles</span></button>
+      <button type="button" class="tb" id="new-btn" title="Start this game over with new pictures. Asks first if you have progress."><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="12" height="12" rx="2"/><path d="M18.5 13.5v8M14.5 17.5h8"/></svg><span class="tb-label">New game</span></button>
+      <button type="button" class="tb" id="theme-btn" title="Switch to dark"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 0 0 16Z" fill="currentColor"/></svg><span class="tb-label">Theme</span></button>
+    </div>
+    <div class="bar-ask" id="ask" hidden>
+      <p class="ask-text" id="ask-text"></p>
+      <button type="button" class="tb" id="ask-no" aria-describedby="ask-text" aria-keyshortcuts="Escape"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18"/></svg><span class="tb-label">Keep playing</span></button>
+      <button type="button" class="tb ask-yes" id="ask-yes" aria-describedby="ask-text"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="3.5" width="12" height="12" rx="2"/><path d="M18.5 13.5v8M14.5 17.5h8"/></svg><span class="tb-label">New game</span></button>
+    </div>
+  </footer>
+  <p class="keys" id="keys"><span id="keys-text">Tap fills · hold or right-click marks empty · drag paints · arrows, Space, X, Z</span> <label class="opt"><input type="checkbox" id="ring-opt">Focus outline</label></p>
+  <p id="live" class="sr-only" role="status" aria-live="polite"></p>
+</main>
+<script src="./engine.js?v=61f57d3c"></script>
+<script src="./zoom.js?v=0099b2a4"></script>
+</body>
+</html>
