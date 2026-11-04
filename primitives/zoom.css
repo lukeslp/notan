@@ -179,12 +179,26 @@ button { font: inherit; color: inherit; }
    up to ink, still pressed, so the run reads as one block. */
 .cell.given.ink.joined::before { background: var(--ink); }
 .cell .thumb { position: absolute; left: var(--in); top: var(--in); border-radius: var(--r); }
-/* Pixel's middle square counts as one filled square: a solid frame says so. */
-.cell.has-thumb::after { content: ""; position: absolute; z-index: 1; inset: var(--in); border-radius: var(--r); box-shadow: inset 0 0 0 2px var(--held); background: none; width: auto; height: auto; transform: none; }
+/* Pixel's middle square is an ordinary locked filled square (gray, or ink
+   when your run joins it) with the last board pressed into it, faintly. */
 .region { position: absolute; z-index: 0; border-radius: calc(var(--r) * 1.6); background: var(--well); box-shadow: var(--wellsh); pointer-events: none; }
 /* The hole lies over its own locked squares and takes no clicks. */
-.hole { position: absolute; z-index: 1; pointer-events: none; }
-.pz.enter .hole { animation: rise 0.9s ease 1.0s both; }
+/* The hole is a round well under the squares (its own squares draw nothing),
+   turning slowly the chain's way round. */
+.hole { position: absolute; z-index: 0; pointer-events: none; animation: swirl-cw 90s linear infinite; }
+.hole.ccw { animation-name: swirl-ccw; }
+.pz.enter .hole { animation: rise 0.9s ease 1.0s both, swirl-cw 90s linear infinite; }
+.pz.enter .hole.ccw { animation: rise 0.9s ease 1.0s both, swirl-ccw 90s linear infinite; }
+@keyframes swirl-cw { to { transform: rotate(360deg); } }
+@keyframes swirl-ccw { to { transform: rotate(-360deg); } }
+/* Squares near it lean in, shrink and turn, in a slow wave round the hole. */
+/* Only the drawing moves (the tile and its mark), never the square's box,
+   so a tap lands where the square sits. */
+.cell.pull::before, .cell.pull::after { animation: pull 5s ease-in-out var(--dl, 0s) infinite alternate; }
+@keyframes pull {
+  from { transform: translate(calc(var(--dx) * var(--a0)), calc(var(--dy) * var(--a0))) rotate(var(--r0)) scale(var(--s0)); }
+  to { transform: translate(calc(var(--dx) * var(--a1)), calc(var(--dy) * var(--a1))) rotate(var(--r1)) scale(var(--s1)); }
+}
 .cursor { position: absolute; z-index: 2; width: var(--cell); height: var(--cell); border-radius: calc(var(--r) + 2px); box-shadow: 0 0 0 2px var(--ink); pointer-events: none; display: none; }
 .cursor.on { display: block; }
 /* Solved: the board sinks into one well and only the picture stays, which
@@ -228,16 +242,23 @@ button { font: inherit; color: inherit; }
 .stage.zooming .cell::before { box-shadow: none; }
 .leaving { z-index: 2; pointer-events: none; }
 .leaving .clue { opacity: 0; transition: opacity 0.35s ease; }
+/* The old board's own backing goes with its numbers: it would land as a
+   second, smaller well inside the new board's (a merged board covers two
+   and a half squares of a three-square seed). */
+.leaving .pz-bg { opacity: 0; transition: opacity 0.35s ease; }
 .leaving .cursor { display: none; }
 /* The new board's open squares and numbers come up as the camera lands, not
    mid-flight, where they showed as large faint blocks. */
 .pz.enter .clue, .pz.enter .cell:not(.given) { animation: rise 0.5s ease 1.05s both; }
 /* The carried-over picture lands raised at full ink, then sinks into the well. */
-.pz.enter .cell.given.ink.fresh::before { animation: settle 0.9s ease 1.25s both; }
+.pz.enter .cell.given.ink.fresh::before { animation: settle 2.15s linear both; }
 .pz.enter .cell .thumb, .pz.enter .cell.given::after { animation: rise 0.9s ease 1.0s both; }
+/* The merged seed stays hidden while the old board flies in over it, fades in
+   as the old board fades out (the last quarter of the move), then sinks. */
 @keyframes settle {
-  from { background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
-  to { background-color: var(--held); box-shadow: var(--press); transform: none; }
+  0%, 48% { opacity: 0; background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
+  65% { opacity: 1; background-color: var(--ink); box-shadow: var(--lift); transform: translateY(var(--rise)); }
+  100% { opacity: 1; background-color: var(--held); box-shadow: var(--press); transform: none; }
 }
 @keyframes rise { from { opacity: 0; } to { opacity: 1; } }
 
@@ -259,7 +280,7 @@ button { font: inherit; color: inherit; }
 .tilt { transform: rotateX(var(--tilt)); transition: transform 0.48s cubic-bezier(.4,0,.2,1); }
 .scene.flat .tilt { transform: none; }
 .scene.instant .tilt { transition: none; }
-.layer { position: absolute; pointer-events: none; }
+.layer { position: absolute; pointer-events: none; translate: calc(var(--px, 0) * var(--d, 1) * -3px) calc(var(--py, 0) * var(--d, 1) * -3px); transition: translate 0.35s ease-out; }
 .layer canvas { position: absolute; inset: 0; }
 .layer .fresh { animation: fade-out 0.9s ease 1.3s both; }
 @keyframes fade-out { from { opacity: 1; } to { opacity: 0; } }
@@ -285,8 +306,9 @@ button { font: inherit; color: inherit; }
 .world-cap { margin: 0; font: 500 12px/1 var(--mono); color: var(--sub); animation: rise 0.5s ease 0.3s both; }
 
 @media (prefers-reduced-motion: reduce) {
-  .pz.enter .clue, .pz.enter .cell, .pz.enter .cell::before, .pz.enter .cell::after, .pz.enter .thumb, .pz.enter .hole, .scene.enter .tile, .scene.enter .base, .layer .fresh, .world-cap, .lost-cap, .cell.hit.now .x { animation: none; }
+  .pz.enter .clue, .pz.enter .cell, .pz.enter .cell::before, .pz.enter .cell::after, .pz.enter .thumb, .pz.enter .hole, .hole, .scene.enter .tile, .scene.enter .base, .layer .fresh, .world-cap, .lost-cap, .cell.hit.now .x { animation: none; }
   .layer .fresh { opacity: 0; }
+  .cell.pull::before, .cell.pull::after { animation: none; transform: translate(calc(var(--dx) * var(--a1)), calc(var(--dy) * var(--a1))) rotate(var(--r1)) scale(var(--s1)); }
   .tilt, .wall { transition: none; }
   .cell::before, .tile { transition: none; }
 }
@@ -344,7 +366,7 @@ button { font: inherit; color: inherit; }
   .pz .cell.pend::before { background: Canvas; border: 3px solid Highlight; }
   .pz.lost .cell.answer::before { background: Canvas; border: 3px solid CanvasText; }
   .pz.solved .cell:not(.ink):not(.given)::before { border-color: transparent; }
-  .cell.has-thumb::after { box-shadow: none; border: 2px solid CanvasText; }
+  .cell.has-thumb::after { content: ""; position: absolute; z-index: 1; inset: var(--in); border-radius: var(--r); border: 2px solid CanvasText; }
   .cursor { box-shadow: none; outline: 2px solid Highlight; }
   .clue span.done { forced-color-adjust: none; color: GrayText; }
   .region { box-shadow: none; border: 1px solid GrayText; }

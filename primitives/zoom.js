@@ -909,8 +909,9 @@
   function drawPressed(ctx, x, y, w, h, pic, depth) {
     const cw = w / pic.w, chh = h / pic.h;
     if (cw < 1.2) return;
+    // faint, so the square still reads as a locked filled one (or ink, joined)
     ctx.fillStyle = tok('--bg');
-    ctx.globalAlpha = Math.max(0.28, 0.6 - depth * 0.1);
+    ctx.globalAlpha = Math.max(0.07, 0.15 - depth * 0.03);
     for (let r = 0; r < pic.h; r++) for (let c = 0; c < pic.w; c++) {
       const i = r * pic.w + c;
       if (pic.sol[i]) continue;
@@ -1117,7 +1118,7 @@
         el.appendChild(x); cellEls.push(x);
       }
     }
-    if (p.region && !p.hole) {
+    if (p.region && !p.hole && p.thumbAt == null) {
       const b = document.createElement('div');
       b.className = 'region';
       b.style.left = `calc(var(--cw) + ${p.region.c} * var(--cell))`;
@@ -1140,7 +1141,7 @@
       cellEls[p.thumbAt].appendChild(cv);
       cellEls[p.thumbAt].classList.add('has-thumb');
     }
-    if (p.hole) el.appendChild(holeCanvas(p, m.cell, g));
+    if (p.hole) { el.appendChild(holeCanvas(p, m.cell)); pullCells(p, cellEls, m.cell); }
     view = { p, el, cellEls, rowEls, colEls, clues, cursor, cur: view && view.p === p ? view.cur : -1, onSolved, region: el.querySelector('.region') };
     for (let i = 0; i < cellEls.length; i++) paintCell(i);
     paintJoined();
@@ -1157,74 +1158,74 @@
    * it meets the board and deepest at the middle. Every board that fell in
    * shows inside it, faint, its own hole holding the ones before. It sits
    * over its own locked squares and takes no clicks. */
-  function holeCanvas(p, cell, g) {
-    const k = p.hole.k, mid = (p.w - 1) / 2, r0 = mid - k, side = (2 * k + 1) * cell;
-    const inHole = new Set(p.hole.cells);
+  /* The hole: a round well under the board, darkest at the middle with a soft
+   * rim, and faint dust on spiral arms that turns slowly the chain's way
+   * round (denser as mass grows). Its own squares are locked empty and draw
+   * nothing, so the well shows through them; it never takes a click. The
+   * radius reaches half a square past the farthest void square's center,
+   * so it reads as a circle, not the plus or diamond of squares under it. */
+  function holeReachPx(p, cell) {
+    const mid = (p.w - 1) / 2;
+    let far = 0;
+    for (const i of p.hole.cells) far = Math.max(far, Math.hypot(Math.floor(i / p.w) - mid, (i % p.w) - mid));
+    return (far + 0.55) * cell;
+  }
+  function holeCanvas(p, cell) {
+    const rho = holeReachPx(p, cell), pad = 4, side = Math.ceil(2 * (rho + pad)), c = side / 2;
     const { cv, ctx } = canvasFor(side, side);
-    ctx.beginPath();
-    for (const i of p.hole.cells) {
-      const r = Math.floor(i / p.w), c = i % p.w;
-      const L = inHole.has(i - 1) && c > 0 ? 0 : g.in, R = inHole.has(i + 1) && c < p.w - 1 ? 0 : g.in;
-      const T = inHole.has(i - p.w) ? 0 : g.in, B = inHole.has(i + p.w) ? 0 : g.in;
-      ctx.rect((c - r0) * cell + L, (r - r0) * cell + T, cell - L - R, cell - T - B);
-    }
-    ctx.clip();
-    const grad = ctx.createRadialGradient(side / 2, side / 2, 0, side / 2, side / 2, side * 0.6);
+    const grad = ctx.createRadialGradient(c, c, 0, c, c, rho);
     grad.addColorStop(0, tok('--void'));
+    grad.addColorStop(0.82, tok('--well'));
     grad.addColorStop(1, tok('--well'));
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, side, side);
-    if (p.thumb) drawFallen(ctx, 0, 0, side, side, p.thumb, 0);
-    // a solid edge, so the void reads as one locked shape on either page
-    ctx.strokeStyle = tok('--held');
-    ctx.lineWidth = 3; // half of it falls outside the clip
-    ctx.beginPath();
-    for (const i of p.hole.cells) {
-      const r = Math.floor(i / p.w), c = i % p.w, x0 = (c - r0) * cell, y0 = (r - r0) * cell;
-      if (!inHole.has(i - p.w)) { ctx.moveTo(x0, y0 + g.in); ctx.lineTo(x0 + cell, y0 + g.in); }
-      if (!inHole.has(i + p.w)) { ctx.moveTo(x0, y0 + cell - g.in); ctx.lineTo(x0 + cell, y0 + cell - g.in); }
-      if (!(inHole.has(i - 1) && c > 0)) { ctx.moveTo(x0 + g.in, y0); ctx.lineTo(x0 + g.in, y0 + cell); }
-      if (!(inHole.has(i + 1) && c < p.w - 1)) { ctx.moveTo(x0 + cell - g.in, y0); ctx.lineTo(x0 + cell - g.in, y0 + cell); }
+    ctx.beginPath(); ctx.arc(c, c, rho, 0, Math.PI * 2); ctx.fill();
+    // dust on spiral arms, thinning outward; more of it as mass grows
+    const h = p.hole, rng = E.mulberry32((h.mass * 7919 + h.arms * 31 + 7) | 0);
+    const n = Math.min(260, 40 + Math.round(h.mass * 0.9));
+    ctx.fillStyle = tok('--tile-hi');
+    for (let k = 0; k < n; k++) {
+      const u = Math.pow(rng(), 0.7), r = rho * (0.12 + 0.82 * u);
+      const arm = (k % h.arms) * (Math.PI * 2 / h.arms);
+      const th = arm + h.spin * 2.4 * Math.log(1 + 3 * u) + (rng() - 0.5) * 0.5;
+      ctx.globalAlpha = 0.25 + 0.55 * (1 - u);
+      const d = Math.max(1, cell * 0.05 * (1.2 - u));
+      ctx.beginPath(); ctx.arc(c + r * Math.cos(th), c + r * Math.sin(th), d, 0, Math.PI * 2); ctx.fill();
     }
-    ctx.stroke();
-    cv.className = 'hole';
-    cv.style.left = `calc(var(--cw) + ${r0} * var(--cell))`;
-    cv.style.top = `calc(var(--ch) + ${r0} * var(--cell))`;
+    ctx.globalAlpha = 1;
+    // a faint rim
+    ctx.strokeStyle = tok('--mark'); ctx.globalAlpha = 0.35; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(c, c, rho - 0.75, 0, Math.PI * 2); ctx.stroke(); ctx.globalAlpha = 1;
+    const mid = (p.w - 1) / 2;
+    cv.className = 'hole ' + (h.spin < 0 ? 'ccw' : 'cw');
+    cv.style.left = `calc(var(--cw) + ${mid + 0.5} * var(--cell) - ${c}px)`;
+    cv.style.top = `calc(var(--ch) + ${mid + 0.5} * var(--cell) - ${c}px)`;
     cv.setAttribute('aria-hidden', 'true');
     return cv;
   }
-  /* A board that fell into the hole, drawn as the outline of its ink (a
-   * line drawing, never square tiles, so it cannot be read as squares to
-   * fill), and inside its own hole the board before it, fainter. */
-  function drawFallen(ctx, x, y, w, h, pic, depth) {
-    const cw = w / pic.w, chh = h / pic.h;
-    if (cw < 1) return;
-    const inHole = new Set(pic.holeCells || []);
-    const ink = (r, c) => r >= 0 && c >= 0 && r < pic.h && c < pic.w && pic.sol[r * pic.w + c] && !inHole.has(r * pic.w + c);
-    ctx.save();
-    ctx.strokeStyle = tok('--held');
-    ctx.globalAlpha = Math.max(0.35, 0.9 - depth * 0.2);
-    ctx.lineWidth = Math.max(0.75, Math.min(1.5, cw * 0.08));
-    ctx.lineCap = 'round';
-    ctx.beginPath();
-    for (let r = 0; r < pic.h; r++) for (let c = 0; c < pic.w; c++) {
-      if (!ink(r, c)) continue;
-      const x0 = x + c * cw, y0 = y + r * chh;
-      if (!ink(r - 1, c)) { ctx.moveTo(x0, y0); ctx.lineTo(x0 + cw, y0); }
-      if (!ink(r + 1, c)) { ctx.moveTo(x0, y0 + chh); ctx.lineTo(x0 + cw, y0 + chh); }
-      if (!ink(r, c - 1)) { ctx.moveTo(x0, y0); ctx.lineTo(x0, y0 + chh); }
-      if (!ink(r, c + 1)) { ctx.moveTo(x0 + cw, y0); ctx.lineTo(x0 + cw, y0 + chh); }
-    }
-    ctx.stroke();
-    ctx.restore();
-    if (pic.thumb && pic.thumbRect) {
-      const t = pic.thumbRect;
-      ctx.save();
-      ctx.beginPath();
-      for (const i of pic.holeCells) ctx.rect(x + (i % pic.w) * cw, y + Math.floor(i / pic.w) * chh, cw, chh);
-      ctx.clip();
-      drawFallen(ctx, x + t.c * cw, y + t.r * chh, t.w * cw, t.h * chh, pic.thumb, depth + 1);
-      ctx.restore();
+  /* Squares near the hole lean toward it, shrink a little and turn with its
+   * spin, more the closer they are, and drift in a slow wave that goes round
+   * the hole. Only the drawing moves; each square keeps its place for taps. */
+  function pullCells(p, cellEls, cell) {
+    const mid = (p.w - 1) / 2, edge = holeReachPx(p, cell) / cell, span = 1.7;
+    const inHole = new Set(p.hole.cells), spin = p.hole.spin;
+    for (let i = 0; i < cellEls.length; i++) {
+      if (inHole.has(i)) continue;
+      const r = Math.floor(i / p.w), c = i % p.w, d = Math.hypot(r - mid, c - mid);
+      const t = Math.max(0, Math.min(1, (edge + span - d) / span));
+      if (!t) continue;
+      const x = cellEls[i].style;
+      x.setProperty('--dx', ((mid - c) / d).toFixed(3));
+      x.setProperty('--dy', ((mid - r) / d).toFixed(3));
+      x.setProperty('--a0', (t * cell * 0.05).toFixed(1) + 'px');
+      x.setProperty('--a1', (t * cell * 0.13).toFixed(1) + 'px');
+      x.setProperty('--r0', (spin * t * 2).toFixed(1) + 'deg');
+      x.setProperty('--r1', (spin * t * 7).toFixed(1) + 'deg');
+      x.setProperty('--s0', (1 - t * 0.07).toFixed(3));
+      x.setProperty('--s1', (1 - t * 0.19).toFixed(3));
+      // the wave goes round the hole the spin's way
+      const ang = Math.atan2(r - mid, c - mid);
+      x.setProperty('--dl', (-((spin * ang / (Math.PI * 2)) + 1) % 1 * 5).toFixed(2) + 's');
+      cellEls[i].classList.add('pull');
     }
   }
 
@@ -1797,7 +1798,8 @@
     const size = 3 * t + 2 * gap;
     const D = Math.round(t * 0.34), cz = 1.5 * D; // first drop, and the vanishing depth
     const scene = document.createElement('div');
-    scene.className = 'scene' + (opts.enter ? ' enter' : '') + (opts.flat ? ' flat' : '');
+    // The plate lies flat; the only depth is the hover parallax below.
+    scene.className = 'scene flat' + (opts.enter ? ' enter' : '');
     scene.style.width = scene.style.height = size + 'px';
     const tilt = document.createElement('div');
     tilt.className = 'tilt';
@@ -1829,6 +1831,7 @@
       shaft(stack, wx, wx, it.W, it.top, it.z - it.top);
       const lay = document.createElement('div');
       lay.className = 'layer';
+      lay.style.setProperty('--d', String(k + 1));
       Object.assign(lay.style, { left: x + 'px', top: x + 'px', width: it.L + 'px', height: it.L + 'px', transform: `translateZ(${-it.z}px)` });
       // drawn at three times its size: the zoom shows it that big
       const a = canvasFor(it.L, it.L, 3);
@@ -1886,6 +1889,17 @@
     });
     stack.appendChild(el);
     stage.appendChild(scene);
+    // Parallax: with a mouse over the plate, the pictures under the window
+    // shift a few pixels against the pointer, more the deeper they are.
+    if (!reduced && matchMedia('(hover: hover) and (pointer: fine)').matches) {
+      scene.addEventListener('pointermove', (e) => {
+        if (e.pointerType !== 'mouse') return;
+        const b = scene.getBoundingClientRect();
+        scene.style.setProperty('--px', (((e.clientX - b.left) / b.width) * 2 - 1).toFixed(3));
+        scene.style.setProperty('--py', (((e.clientY - b.top) / b.height) * 2 - 1).toFixed(3));
+      });
+      scene.addEventListener('pointerleave', () => { scene.style.setProperty('--px', '0'); scene.style.setProperty('--py', '0'); });
+    }
     if (opts.flat) { scene.classList.add('instant'); void scene.offsetWidth; scene.classList.remove('instant'); }
     const left = w.tiles.filter((x) => !x.done).length;
     const cap = document.createElement('p');
@@ -1915,10 +1929,10 @@
     return scene;
   }
 
+  /* The plate no longer tilts: it stays level, so this only keeps it flat. */
   function setFlat(scene, flat, after) {
-    if (!scene || reduced || scene.classList.contains('flat') === flat) { if (scene) scene.classList.toggle('flat', flat); after(); return; }
-    scene.classList.toggle('flat', flat);
-    setTimeout(after, 480);
+    if (scene) scene.classList.add('flat');
+    after();
   }
 
   /* ---------- flow ---------- */

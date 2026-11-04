@@ -27,6 +27,7 @@ function midZoom() {
   let zooms = 0;
   for (const [vw, vh, tag] of [[1200, 860, 'desk'], [390, 800, 'phone']]) {
     const pg = await b.newPage({ viewport: { width: vw, height: vh } });
+    await pg.route('https://stats.dr.eamer.dev/**', (r) => r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }));
     pg.on('pageerror', (e) => errs.push(tag + ' ' + e.message));
     pg.on('console', (m) => { if (m.type() === 'error') errs.push(tag + ' ' + m.text()); });
     await pg.goto((process.env.BASE || 'http://127.0.0.1:8765') + '/notan-zoom-lab/');
