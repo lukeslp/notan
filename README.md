@@ -71,6 +71,15 @@ October 2026, and the key stayed the same so nobody lost their progress.
 `index.html` loads a GoatCounter script that counts visits on my own stats server. Remove that
 `<script>` line if you host a copy.
 
+## Nonogram Primitives
+
+`primitives/` holds Nonogram Primitives, user interface experiments dressed up as games, built on
+Notan's engine: a nonogram that zooms out each time a board is solved, in six modes (Merge, Pixel,
+Hole, Ring, Patch, Mines). Open `primitives/index.html` through a local static server.
+`primitives/README.md` describes the modes, the generator and the tests. Like the rest of this repo,
+it is synced from game-riffs (`notan-zoom-lab/`) by `tools/publish-notan-source.sh`, so change it
+there.
+
 ## License
 
 MIT, © 2026 Luke Steuber. See `LICENSE`. The IBM Plex fonts are under the SIL Open Font License
