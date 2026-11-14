@@ -124,8 +124,22 @@ The iOS shell uses the UIScene life cycle (`ios/App/App/SceneDelegate.swift`
 and `UIApplicationSceneManifest` in `Info.plist`). Keep both: UIKit refuses to
 launch an app built with the iOS 27 SDK without them (Apple TN3187). Build
 1.0.0 (1), uploaded 2026-11-13, predates them and would not launch on iOS 27.
-To check a build, launch it on an iOS 27 simulator and confirm the log has no
-"UIScene life cycle is required" line.
+
+Use Capacitor 8.5 or later with scenes. Under the scene life cycle UIKit posts
+`UIApplication.willEnterForegroundNotification` on a cold start, and Capacitor
+8.3.1 answers it by running a `resume` event in the page before the page has
+loaded (the console shows "JS Eval error"). Capacitor 8.5 skips lifecycle
+events until the first load is done. On 2026-11-14, on iOS 27.2 simulators on a
+very busy Mac, 7 of 20 cold launches of the 8.3.1 shell (1.0.0 (2)) sat on a
+blank page for the 20–45 s they were watched; one sample showed the page's
+start-up `prompt()` to the native bridge still unanswered while the app was
+idle. All 7 came in one 15-minute stretch; the other 13 loaded. All 11
+launches on 8.5.3 loaded. Not seen on a device.
+
+To check a build, launch it on an iOS 27 simulator with
+`xcrun simctl launch --console-pty <device> com.playnotan.app`: the console
+must print `⚡️  WebView loaded` (a busy Mac can take 30 s), the screen must show
+the board, and the log must have no "UIScene life cycle is required" line.
 
 ## License
 
