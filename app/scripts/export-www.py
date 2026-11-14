@@ -98,11 +98,14 @@ def git(source: Path, *args: str) -> str:
 
 
 def record(source: Path, out: Path) -> None:
-    commit = git(source, "rev-parse", "HEAD")
-    dirty = git(source, "status", "--porcelain", "--untracked-files=no", "--", *json.loads((source / "runtime.json").read_text())["files"], "runtime.json")
+    game_files = [*json.loads((source / "runtime.json").read_text())["files"], "runtime.json"]
+    dirty = git(source, "status", "--porcelain", "--untracked-files=no", "--", *game_files)
     if dirty:
         die("the game source has uncommitted changes; commit them before exporting so the payload has a source commit")
-    subject = git(source, "log", "-1", "--format=%s")
+    # The last commit that touched the game files (normally a sync from
+    # game-riffs), not HEAD: commits under app/ do not change the game.
+    commit = git(source, "log", "-1", "--format=%H", "--", *game_files)
+    subject = git(source, "log", "-1", "--format=%s", commit)
     upstream = re.search(r"from game-riffs ([0-9a-f]{7,40})", subject)
     lines = [
         "# Vendored payload provenance. Do not hand-edit www/.",

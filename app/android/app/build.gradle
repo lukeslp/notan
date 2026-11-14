@@ -17,7 +17,7 @@ android {
         applicationId "com.playnotan.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        // Proposed id, same as iOS; permanent after the first store upload.
+        // Same id as iOS; permanent after the first store upload.
         // Keep anything keyed to it reading ${applicationId}, never a literal.
         versionCode 1
         versionName "1.0.0"

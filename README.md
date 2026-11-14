@@ -83,9 +83,8 @@ there.
 ## Native app
 
 `app/` wraps this game for iPhone, iPad and Android as an offline Capacitor
-app, on the pattern of Hexsweeper's. See `app/README.md`. Before the next
-sync from game-riffs, `tools/publish-notan-source.sh` needs `--exclude /app`,
-or its `rsync --delete` removes that folder.
+app, on the pattern of Hexsweeper's. See `app/README.md`. The game-riffs
+sync script excludes `/app`, so syncs leave it alone.
 
 ## License
 

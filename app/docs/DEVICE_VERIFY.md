@@ -46,3 +46,13 @@ New Game+, the Access switch frame, Android API levels below 36, foldables
 and camera-cutout phones, a Release-signed binary on either platform.
 
 Store screenshots in `app-store/` come from these runs.
+
+## 2026-11-13 (later), payload 5a87207 (game-riffs a802c9a), debug builds
+
+Re-export after game-riffs PRs 143 and 144 (Erase progress wording;
+`privacy.html` added to the payload). Fresh installs on the iPhone 17 Pro
+Max simulator (iOS 26.5) and the API 36 emulator: levels 1–3 solved by taps
+on each, a square filled on level 4, the app killed (iOS terminate; Android
+force-stop two seconds after the tap) and relaunched: level 4 came back with
+the square filled on both. `smoke.sh --with-source ~/workspace/game-riffs/notan`
+green.

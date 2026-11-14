@@ -10,18 +10,16 @@ signing steps have to run from Luke's own Terminal (or Xcode).
 |---|---|
 | App Store name | `Notan` (fallback `Notan Nonogram`, if taken) |
 | Home-screen name | `Notan` (`CFBundleDisplayName`, independent of the listing) |
-| iOS bundle id | `com.playnotan.app` (proposed; permanent after first upload) |
+| iOS bundle id | `com.playnotan.app` (confirmed; permanent after first upload) |
 | Android application id | `com.playnotan.app` (same) |
 | Apple team | `596T7J7FB6` |
 | Version | `1.0.0 (1)` on both platforms |
 
 ## 0. Before anything
 
-1. Confirm or change the id (README, "Decisions for the owner").
-2. Add `--exclude /app` to game-riffs `tools/publish-notan-source.sh`
-   (README, "Before the next sync").
-3. Publish `app-store/privacy-policy.html` at
-   `https://playnotan.com/privacy.html`. Both stores want the URL.
+Done on 2026-11-13: the id `com.playnotan.app` is confirmed (Luke), the
+game-riffs sync excludes `/app` (game-riffs PR 143), and the privacy policy
+is live at `https://playnotan.com/privacy.html` (PR 144).
 
 ## 1. iOS: App Store Connect record
 

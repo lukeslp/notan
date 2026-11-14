@@ -10,23 +10,17 @@ The app opens straight onto the board, exactly like the web game: level 1 on
 a first launch, otherwise wherever the saved game left off. Nothing opens by
 itself. How to play, Levels and Settings are the game's own sheets.
 
-## Before the next sync from game-riffs
+## Syncs from game-riffs
 
 `tools/publish-notan-source.sh` in game-riffs copies `notan/` here with
-`rsync -a --delete` and then `git add -A`. Its exclude list does not name
-`app/`, so **the next sync would delete this folder and commit the
-deletion**. Add one exclude before running it again:
-
-```diff
--rsync -a --delete --exclude README.md --exclude LICENSE --exclude .gitignore --exclude .git --exclude node_modules --exclude /primitives notan/ "$dest/"
-+rsync -a --delete --exclude README.md --exclude LICENSE --exclude .gitignore --exclude .git --exclude node_modules --exclude /primitives --exclude /app notan/ "$dest/"
-```
+`rsync -a --delete`; since game-riffs PR 143 it excludes `/app`, so syncs
+leave this folder alone. Keep that exclude.
 
 ## Decisions for the owner
 
 | Decision | Proposed | Why |
 |---|---|---|
-| iOS bundle id and Android application id | **`com.playnotan.app`** (one id for both, as Hexsweeper shares one) | Reverse of the game's own domain, playnotan.com, the pattern of Luke's other domain-named apps (`com.naqbu.app`, `com.diachronica.app`). Hexsweeper's own id, `app.hexodus.ios`, is inherited from an abandoned app and is not a pattern to copy. **Permanent after the first upload to either store.** Change it in `capacitor.config.js`, `android/app/build.gradle` (`namespace`, `applicationId`, plus the Java package folder) and `PRODUCT_BUNDLE_IDENTIFIER` in the Xcode project before any upload if you want another |
+| iOS bundle id and Android application id | **`com.playnotan.app`** (one id for both, as Hexsweeper shares one). Confirmed by Luke 2026-11-13 | Reverse of the game's own domain, playnotan.com, the pattern of Luke's other domain-named apps (`com.naqbu.app`, `com.diachronica.app`). Hexsweeper's own id, `app.hexodus.ios`, is inherited from an abandoned app and is not a pattern to copy. **Permanent after the first upload to either store.** Change it in `capacitor.config.js`, `android/app/build.gradle` (`namespace`, `applicationId`, plus the Java package folder) and `PRODUCT_BUNDLE_IDENTIFIER` in the Xcode project before any upload if you want another |
 | App Store name | `Notan` (fallback `Notan Nonogram`) | The App Store requires a unique name; `Notan` may be taken. The home-screen name stays `Notan` either way (`CFBundleDisplayName`) |
 | Google Play title | `Notan: Nonogram` | Play titles need not be unique; the suffix helps search |
 | Android backup | Off | Matches Hexsweeper 1.0.10. Progress is one small `ink.v1` value; carrying it to a new phone would need Hexsweeper's `TravelingData` approach. A follow-up, not a blocker |
@@ -39,7 +33,7 @@ deletion**. Add one exclude before running it again:
 | Product / display name | **Notan** |
 | Repository | `lukeslp/notan`, this folder (`app/`) |
 | Game source | the repository root, synced from game-riffs `notan/` |
-| iOS bundle id / Android application id | `com.playnotan.app` (proposed, see above) |
+| iOS bundle id / Android application id | `com.playnotan.app` |
 | Apple team | `596T7J7FB6` (Hexsweeper's), automatic signing |
 | App Store Connect record | not created yet |
 
@@ -56,7 +50,7 @@ deletion**. Add one exclude before running it again:
 | `scripts/smoke.sh` | Payload integrity, offline posture, both `cap sync`s |
 | `scripts/android-build.sh` | JDK 21 Gradle wrapper for APK/AAB builds and unit tests |
 | `scripts/generate-icons.sh` | App icons rendered from `../favicon.svg` |
-| `app-store/` | Store copy, screenshots, icons, privacy answers, privacy policy draft |
+| `app-store/` | Store copy, screenshots, icons, privacy and rating answers |
 | `docs/` | Release steps and device checks |
 | `licenses/`, `THIRD-PARTY-NOTICES.md` | Notices for bundled third-party material |
 

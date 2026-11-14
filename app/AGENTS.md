@@ -2,8 +2,8 @@
 
 Capacitor shell around the Notan nonogram for iOS and Android, modeled on
 Hexsweeper's `app/` (lukeslp/hexsweeper). Read `README.md` first: it records
-the proposed bundle id, the decisions waiting on the owner, and the sync
-script exclude that must be added in game-riffs before the next sync.
+the bundle id `com.playnotan.app` (confirmed, permanent), the owner's
+decisions, and why game-riffs' sync script must keep excluding `/app`.
 
 ## The one rule
 

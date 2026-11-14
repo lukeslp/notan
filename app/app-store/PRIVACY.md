@@ -27,7 +27,7 @@ What to enter in App Store Connect and the Google Play Console for Notan
 |---|---|
 | App Privacy: data collection | **Data Not Collected** |
 | Tracking | No |
-| Privacy policy URL | Required. Publish `privacy-policy.html` (draft beside this file) at `https://playnotan.com/privacy.html` first; nothing is served there today (404 on 2026-11-13) |
+| Privacy policy URL | `https://playnotan.com/privacy.html` (live; source is game-riffs `notan/privacy.html`, also bundled as `www/privacy.html`) |
 | Export compliance | Uses no non-exempt encryption (`ITSAppUsesNonExemptEncryption` = NO is already in `Info.plist`) |
 | Age rating | Every content question **None** / **No**; Unrestricted Web Access **No** (the single link opens Safari, there is no in-app browser); Social media (`ageRatingDeclarations.socialMedia`) **No**; Gambling, contests, user-generated content **No**. Expected result 4+ |
 | Category | Games → Puzzle (secondary: Games → Board, optional) |
