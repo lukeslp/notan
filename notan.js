@@ -295,7 +295,9 @@
     const capH = caption.hidden ? 122 * save.zoom / 100 : Math.max(122, caption.offsetHeight);
     const k = Math.min(1, ((H - capH) * 0.72) / (h * g.cell), (W * 0.8) / (w * g.cell));
     const pw = w * g.cell * k, ph = h * g.cell * k;
-    const tx = (vw - pw) / 2, ty = top + Math.max(0, (H - ph - capH) / 2);
+    // Straight up from where the squares are: keep their center, not the page's (the row numbers
+    // put the grid right of center, and the picture should not slide sideways to undo that).
+    const tx = g.left + g.cw + (w * g.cell - pw) / 2, ty = top + Math.max(0, (H - ph - capH) / 2);
     const dx = Math.round(tx - g.left - k * g.cw), dy = Math.round(ty - g.top - k * g.ch);
     board.style.cssText = `--cell:${g.cell}px;--f:${g.f}px;--cw:${g.cw}px;--ch:${g.ch}px;--dot:${Math.max(3, Math.round(g.cell * 0.16))}px;--solved:translate(${dx}px,${dy}px) scale(${k.toFixed(4)});left:${g.left}px;top:${g.top}px;width:${bw}px;height:${bh}px`;
     caption.style.top = Math.round(ty + ph + 14) + 'px';
@@ -345,31 +347,27 @@
     return ok;
   }
   /* A solved picture takes Slant's four colors: each connected shape of filled squares gets one,
-   * and shapes that touch, even at a corner, get different ones. The rules and the board never change. */
+   * and shapes that touch, even at a corner, get different ones. Paper stays paper, so holes stay
+   * see-through. The rules and the board never change. */
   const PAINT = ['#1768ff', '#ffe000', '#ed6500', '#da5cce'];
   function paint() {
     const { w, h } = S.puz, n = S.cells.length, comp = new Int32Array(n).fill(-1), sizes = [];
     if (S.solved) {
-      // Sections: each connected shape of ink, and each pocket of paper the picture closes in
-      // (an eye, a window). Paper that reaches the edge stays paper.
-      const ink = (k) => S.cells[k] === INK;
+      // Sections: each connected shape of ink. Paper, holes included, stays see-through.
       for (let i = 0; i < n; i++) {
-        if (comp[i] >= 0) continue;
-        const kind = ink(i), id = sizes.length, stack = [i], members = [i];
-        comp[i] = id; let edge = false;
+        if (S.cells[i] !== INK || comp[i] >= 0) continue;
+        const id = sizes.length, stack = [i];
+        comp[i] = id; let size = 0;
         while (stack.length) {
-          const j = stack.pop(), x = j % w, y = Math.floor(j / w);
-          if (x === 0 || y === 0 || x === w - 1 || y === h - 1) edge = true;
+          const j = stack.pop(), x = j % w, y = Math.floor(j / w); size++;
           for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
             const nx = x + dx, ny = y + dy, k = ny * w + nx;
-            if (nx < 0 || ny < 0 || nx >= w || ny >= h || ink(k) !== kind || comp[k] >= 0) continue;
-            comp[k] = id; stack.push(k); members.push(k);
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h || S.cells[k] !== INK || comp[k] >= 0) continue;
+            comp[k] = id; stack.push(k);
           }
         }
-        if (!kind && edge) { for (const k of members) comp[k] = -2; continue; }
-        sizes.push(members.length);
+        sizes.push(size);
       }
-      for (let i = 0; i < n; i++) if (comp[i] === -2) comp[i] = -1;
     }
     const near = sizes.map(() => new Set());
     for (let i = 0; i < n; i++) {
