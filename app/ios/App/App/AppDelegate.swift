@@ -1,5 +1,8 @@
 import UIKit
 import Capacitor
+#if DEBUG
+import WebKit
+#endif
 
 @UIApplicationMain
 class AppDelegate: UIResponder, UIApplicationDelegate {
@@ -54,7 +57,71 @@ class NotanBridgeViewController: CAPBridgeViewController {
         webView.scrollView.backgroundColor = .systemBackground
         webView.scrollView.bounces = false
         webView.scrollView.contentInsetAdjustmentBehavior = .never
+        #if DEBUG
+        StoreShot.install(on: webView)
+        #endif
     }
 
     override var prefersStatusBarHidden: Bool { true }
 }
+
+#if DEBUG
+// MARK: - StoreShot (Debug builds only)
+//
+// `xcrun simctl launch <device> com.playnotan.app -NotanShot <scene>` opens the
+// game on a fixed screen with no taps, for store screenshots on screens simctl
+// cannot tap (the iPhone Duo's outer screen while folded). `scripts/capture-duo.sh`
+// drives it. Scenes, matching the 6.9" iPhone set:
+//   progress  Owl (level 35), top six rows filled, 0:30, light
+//   solved    Fish (level 14) solved, 0:18, light
+//   levels    the Levels sheet, levels 1-34 solved, dark
+// The script writes the game's own save (`ink.v1`) just before the game first
+// reads it, so the game opens the scene through its normal start-up; the payload
+// in www/ is untouched. Release builds compile none of this.
+enum StoreShot {
+    static let scenes = ["progress", "solved", "levels"]
+
+    static func install(on webView: WKWebView) {
+        guard let scene = UserDefaults.standard.string(forKey: "NotanShot"), scenes.contains(scene) else { return }
+        let source = script.replacingOccurrences(of: "__SCENE__", with: scene)
+        webView.configuration.userContentController.addUserScript(
+            WKUserScript(source: source, injectionTime: .atDocumentStart, forMainFrameOnly: true))
+        NSLog("NotanShot: %@", scene)
+    }
+
+    private static let script = """
+    (function () {
+      'use strict';
+      var scene = '__SCENE__', KEY = 'ink.v1', theme = scene === 'levels' ? 'dark' : 'light';
+      // index.html reads the theme from the save before the engine loads.
+      try { localStorage.setItem(KEY, JSON.stringify({ theme: theme })); } catch (e) {}
+      // Then notan.js reads the save once engine.js and levels.js are in.
+      var get = Storage.prototype.getItem;
+      Storage.prototype.getItem = function (k) {
+        if (k === KEY && window.InkEngine && window.InkLevels) {
+          Storage.prototype.getItem = get;
+          try { localStorage.setItem(KEY, JSON.stringify(seed())); } catch (e) { console.error('NotanShot', e); }
+        }
+        return get.apply(this, arguments);
+      };
+      function cells(id, rows) {
+        var level = window.InkLevels.find(function (l) { return l.id === id; });
+        var p = window.InkEngine.fromArt(level.art), out = '';
+        for (var i = 0; i < p.sol.length; i++) out += Math.floor(i / p.w) < rows && p.sol[i] ? '1' : '0';
+        return out;
+      }
+      function seed() {
+        var solved = {};
+        window.InkLevels.slice(0, 34).forEach(function (l, i) { solved[l.id] = 25 + 7 * i; });
+        var s = { at: 'owl', solved: solved, boards: { owl: { c: cells('owl', 6), t: 30 } },
+                  hinted: {}, seen: true, rampOrder: 2, theme: theme };
+        if (scene === 'solved') { s.at = 'fish'; s.boards.fish = { c: cells('fish', 99), t: 18 }; }
+        return s;
+      }
+      if (scene === 'levels') addEventListener('load', function () {
+        setTimeout(function () { document.getElementById('lvl-btn').click(); }, 400);
+      });
+    })();
+    """
+}
+#endif

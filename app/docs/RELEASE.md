@@ -32,6 +32,12 @@ Fill the listing from `app-store/metadata/en-US/` and the answers in
 `app-store/PRIVACY.md`. Screenshots: `app-store/screenshots/en-US/*.png`
 (1320×2868, the 6.9" iPhone slot) and `*-ipad.png` (2064×2752, the 13" iPad
 slot). App icon is in the binary; `app-store/icon-1024.png` is the same art.
+iPhone Duo: `app-store/screenshots/iphone-duo-outer/` (1398×2034, the folded
+outer screen). `scripts/capture-duo.sh <udid> <outer|inner> <outdir> [App.app]`
+makes the outer or inner set from a Debug build with no taps (its header has
+the build command); `asc_ship.py screenshots` reads one folder, so stage these
+next to the en-US files. The 6.9" and iPad solved shots predate the solved
+colors of 1.0.0 (2) (the picture now turns a color; those shots show it black).
 
 ## 2. iOS: archive and upload to TestFlight
 
