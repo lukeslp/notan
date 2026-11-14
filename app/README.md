@@ -82,7 +82,9 @@ they live here so game-riffs stays untouched.
 - **Theme.** The game follows the system light or dark setting unless the
   player picks one in Settings. Android's theme is DayNight so the WebView
   reports `prefers-color-scheme` correctly; launch screens use the page
-  color (white or black) so nothing flashes.
+  color (white or black) so nothing flashes. On Android the page color also
+  paints the window background, so the band beside a camera cutout follows
+  the in-game theme rather than the system one.
 - **System Back** (Android) closes the topmost open sheet, then leaves.
 - **Saves** are the game's own `localStorage` key `ink.v1`. They survive a
   relaunch on both platforms. On Android a move made less than about a
