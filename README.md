@@ -80,6 +80,12 @@ Hole, Ring, Patch, Mines). Open `primitives/index.html` through a local static s
 it is synced from game-riffs (`notan-zoom-lab/`) by `tools/publish-notan-source.sh`, so change it
 there.
 
+## Native app
+
+`app/` wraps this game for iPhone, iPad and Android as an offline Capacitor
+app, on the pattern of Hexsweeper's. See `app/README.md`. The game-riffs
+sync script excludes `/app`, so syncs leave it alone.
+
 ## License
 
 MIT, © 2026 Luke Steuber. See `LICENSE`. The IBM Plex fonts are under the SIL Open Font License
