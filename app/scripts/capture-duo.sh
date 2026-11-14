@@ -43,7 +43,7 @@ xcrun simctl list devices | grep -q "($UDID) (Booted)" || fail "simulator $UDID 
 if [ "$SCREEN" = inner ]; then
   # Unfolded = LCD-1 active. If devicectl can't tell, the black check below still guards.
   if info=$(xcrun devicectl device info displays --device "$UDID" 2>/dev/null); then
-    echo "$info" | awk '/LCD-1:/{f=1} f&&/active:/{print; exit}' | grep -q "active: true" \
+    echo "$info" | awk '/LCD-1/{f=1} f&&/ active:/{print; exit}' | grep -q "active: true" \
       || fail "inner display LCD-1 is not active: unfold the Duo in Device Hub first"
   fi
 fi
@@ -59,7 +59,15 @@ WORK=$(mktemp -d "${TMPDIR:-/tmp}/notan-duo.XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
 
 shot() { xcrun simctl io "$UDID" screenshot --display="$DISPLAY_ARG" "$1" >/dev/null 2>&1; }
-stats() { magick "$1" -format '%w %h %[fx:mean] %[fx:standard_deviation]' info: 2>/dev/null; }
+# Size, then mean and spread of the color channels (alpha off: an opaque black
+# RGBA frame would otherwise read as mean 0.25).
+stats() { magick "$1" -alpha off -format '%w %h %[fx:mean] %[fx:standard_deviation]' info: 2>/dev/null; }
+# The hook logs "NotanShot: <scene>" through NSLog; read it back from the unified log.
+logged() {
+  xcrun simctl spawn "$UDID" log show --start "$1" --style compact \
+    --predicate "process == \"App\" AND eventMessage CONTAINS \"NotanShot: $2\"" 2>/dev/null \
+    | grep -q "NotanShot: $2"
+}
 
 n=0
 for scene in $SCENES; do
@@ -70,9 +78,9 @@ for scene in $SCENES; do
     levels)   name=03-levels-dark; want=dark ;;
     *) fail "unknown scene '$scene' (progress, solved, levels)" ;;
   esac
-  log="$WORK/$scene.log"
   xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1
-  xcrun simctl launch --stderr="$log" "$UDID" "$BUNDLE" -NotanShot "$scene" >/dev/null \
+  start=$(date '+%Y-%m-%d %H:%M:%S')
+  xcrun simctl launch "$UDID" "$BUNDLE" -NotanShot "$scene" >/dev/null \
     || fail "launch failed for $scene"
   # Wait until the screen has painted and holds still for two frames.
   prev=""; ok=""; t0=$SECONDS
@@ -87,20 +95,24 @@ for scene in $SCENES; do
     fi
     prev=$cur
   done
-  grep -q "NotanShot: $scene" "$log" 2>/dev/null \
+  logged "$start" "$scene" \
     || fail "$scene: the app never logged 'NotanShot: $scene' (a Release build, or the hook is gone)"
   [ -n "$ok" ] || fail "$scene: no steady, painted screen within ${TIMEOUT}s (last: ${w:-?}x${h:-?} mean ${mean:-?} sd ${sd:-?})"
   read -r w h mean sd <<<"$(stats "$ok")"
   echo " $SIZES " | grep -q " ${w}x${h} " || fail "$scene: ${w}x${h}, expected one of: $SIZES"
-  awk -v m="$mean" 'BEGIN{exit !(m > 0.01)}' || fail "$scene: black screen (mean $mean)"
+  # The dark Levels sheet reads about 0.02, a black frame 0.
+  awk -v m="$mean" 'BEGIN{exit !(m > 0.005)}' || fail "$scene: black screen (mean $mean)"
   if [ "$want" = dark ]; then
     awk -v m="$mean" 'BEGIN{exit !(m < 0.5)}' || fail "$scene: expected the dark theme, mean $mean"
   else
     awk -v m="$mean" 'BEGIN{exit !(m > 0.5)}' || fail "$scene: expected the light theme, mean $mean"
   fi
-  magick "$ok" -background white -alpha remove -alpha off "$OUT/$name.png" || fail "flatten failed"
+  # Opaque 8-bit RGB (color-type 2): ImageMagick would otherwise write a
+  # black-and-white frame as grayscale.
+  magick "$ok" -background white -alpha remove -alpha off -define png:color-type=2 "$OUT/$name.png" \
+    || fail "flatten failed"
   ch=$(magick identify -format '%[channels]' "$OUT/$name.png")
-  case "$ch" in *a*) fail "$scene: alpha left after flattening ($ch)" ;; esac
+  [ "${ch%% *}" = srgb ] || fail "$scene: expected opaque sRGB after flattening, got '$ch'"
   printf '%s  %sx%s  mean %.3f  sd %.3f  %s\n' "$OUT/$name.png" "$w" "$h" "$mean" "$sd" "$ch"
 done
 xcrun simctl terminate "$UDID" "$BUNDLE" >/dev/null 2>&1
