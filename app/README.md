@@ -120,6 +120,13 @@ Capacitor 8 needs Node 22+, an Android SDK with API 36 and JDK 21 (the
 wrapper finds Homebrew's keg-only `openjdk@21`). iOS builds need Xcode 26 or
 later. Release steps are in [docs/RELEASE.md](docs/RELEASE.md).
 
+The iOS shell uses the UIScene life cycle (`ios/App/App/SceneDelegate.swift`
+and `UIApplicationSceneManifest` in `Info.plist`). Keep both: UIKit refuses to
+launch an app built with the iOS 27 SDK without them (Apple TN3187). Build
+1.0.0 (1), uploaded 2026-11-13, predates them and would not launch on iOS 27.
+To check a build, launch it on an iOS 27 simulator and confirm the log has no
+"UIScene life cycle is required" line.
+
 ## License
 
 MIT; see [LICENSE](LICENSE). The payload bundles IBM Plex Sans and IBM Plex
