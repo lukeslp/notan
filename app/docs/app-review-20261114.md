@@ -88,8 +88,10 @@ In short: Notan is an offline nonogram puzzle game. It has no accounts, purchase
 Please let me know if you need anything else.
 ```
 
-## Needs Luke's yes (none of it done)
 
-- Make and attach the recording.
-- Set the Notes text above on version 1.0 (`6ec93027-20ac-43f5-b85e-b03b2021bea0`).
-- Send the reply and resubmit 1.0.0 (3).
+## Outcome, 14 November 2026 (night)
+
+Luke made the recording, attached it to the reply in App Review, set the
+Notes text above (first line reworded to "attached to my reply in App
+Review") and resubmitted. Version 1.0 with build 1.0.0 (3) is Waiting for
+Review again on the same submission. No new build was uploaded.
