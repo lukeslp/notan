@@ -496,13 +496,29 @@
       }
     } else if (loose) best = Object.assign(loose, { fallback: true });
     else {
-      // Rare: take any picture the clues alone solve, guards or not.
+      // Rare: take any picture the clues alone solve, guards or not, as long
+      // as Notan's line solver finishes it too.
       for (let t = 0; t < 200 && !best; t++) {
         const s = settle(makePicture(w, h, fixed, rng, spec), w, h, fixed, rng, t < 100 ? band.solver : 'full');
-        if (s) best = { sol: s, score: scoreFrom(s, w, h, fixed), m: gradeFrom(s, w, h, fixed, band.solver), fallback: true };
+        const score = s ? scoreFrom(s, w, h, fixed) : null;
+        if (score !== null) best = { sol: s, score, m: gradeFrom(s, w, h, fixed, band.solver), fallback: true };
       }
+      // Never seen: nothing settled at all. Stripes always solve.
+      if (!best) { const s = stripes(w, h, fixed); best = { sol: s, score: scoreFrom(s, w, h, fixed), m: gradeFrom(s, w, h, fixed, band.solver), fallback: true }; }
     }
     return { w, h, sol: best.sol, given: Int8Array.from(fixed), cells: new Int8Array(w * h).fill(-1), region: null, gen, score: best.score, rounds: best.m.rounds, fallback: !!best.fallback };
+  }
+
+  /* The last resort when no picture can be settled: the open squares of
+   * every other row all ink, the rest all empty, around whatever is locked.
+   * Each row then finishes on its own (its numbers add up to every square
+   * not locked empty, or to its locked ink alone), so the board has one
+   * answer and needs no guess whatever is locked. Sampling has never needed
+   * it; it is here so no board can ship that the clues do not settle. */
+  function stripes(w, h, fixed) {
+    const g = new Uint8Array(w * h);
+    for (let i = 0; i < g.length; i++) g[i] = fixed[i] >= 0 ? fixed[i] : Math.floor(i / w) % 2 === 0 ? 1 : 0;
+    return g;
   }
 
   function sliceOf(sol, W, r0, c0, n) {
@@ -613,6 +629,13 @@
     // solved before it opens, or slow). Give each one a picture of its own,
     // keeping its locked edge, rather than throw the plate away.
     if (best.poor) for (const tile of best.tiles) if (!tile.center && !tileOk(tile.puzzle)) repairTile(best.sol, W, tile, rng);
+    // A tile left unsettled even after that (never seen) gets stripes around
+    // its locked edge, so every tile has one answer the clues reach.
+    for (const tile of best.tiles) {
+      if (tile.center) continue;
+      const p = tile.puzzle;
+      if (!gradeFrom(p.sol, T, T, p.given, 'full').solved) setTile(best.sol, W, tile, stripes(T, T, p.given));
+    }
     return { kind: 'world', W, T, sol: best.sol, tiles: best.tiles, gen };
   }
   /* A tile is a real puzzle: three to 22 ink squares, not solved before it
