@@ -13,7 +13,7 @@ signing steps have to run from Luke's own Terminal (or Xcode).
 | iOS bundle id | `com.playnotan.app` (confirmed; permanent after first upload) |
 | Android application id | `com.playnotan.app` (same) |
 | Apple team | `596T7J7FB6` |
-| Version | `1.0.0 (1)` on both platforms |
+| Version | `1.0.1 (4)` on both platforms (1.0.0 (3) is live) |
 
 ## 0. Before anything
 
@@ -132,3 +132,48 @@ the owned batch in the LocalType releases F-Droid repository
 (android-release-toolkit), and the `android-download-publish` skill for the
 dr.eamer.dev downloads page. The APK holds no permissions and no trackers,
 which suits both.
+
+## 1.0.1 (4), prepared 2026-11-18: not signed, not uploaded
+
+Brings the app to the game the web (playnotan.com) and Minimal Primitives
+0.5.11 run (game-riffs `4a9c688`; 1.0 (3) shipped `d6db95d`).
+
+What players get, from game-riffs `d6db95d..4a9c688` (`notan/`): a second
+Hint press makes the hinted move; after the solve, Next is the round
+continue disc Weaves uses, placed by the painted board, with the picture's
+caption kept; Next past the last puzzle goes to the first unfinished one;
+the end of each campaign shows on screen. game-riffs also gained a test that
+every dealt board has one answer logic reaches (`test-solvable.cjs`).
+
+Checked on napoleon 2026-11-18, side by side with the web copy and Minimal
+0.5.11's `build/html` (Playwright at 390×844, light and dark, Chromium and
+WebKit): Settings identical to the web (Minimal adds only Collection
+scores), the continue disc the same 64 px disc at the same spot, Help the
+same, no page errors. `pnpm smoke` green.
+
+Simulator, 2026-11-18 (napoleon, Xcode 27.2, iOS 27.2 iPhone Duo sim
+"Slant Duo 20261114", folded outer screen): Debug build, `scripts/capture-duo.sh … outer`
+scenes solved, in progress and levels all accepted; the solved scene shows
+the new continue disc. `simctl launch --console-pty` printed `WebView
+loaded`, no UIScene line and no errors. The other outer shots are
+pixel-identical to 1.0's; `iphone-duo-outer/02-solved.png` was replaced
+with the new disc. On the folded screen the toolbar stops short of the
+trailing edge: that is iOS's status-bar column beside the camera, and 1.0
+did the same. External links: no `allowNavigation` is set, so Capacitor
+opens any outside host in Safari (iOS `WebViewDelegationHandler`) or the
+browser (Android `Bridge.launchIntent`, `ACTION_VIEW`); read in the
+Capacitor 8.5.3 source, not tapped. **Not run:** the unfolded Duo poses
+(folding needs a click in Device Hub), an Android emulator (the Android
+WebView is the Chromium checked above), a phone.
+
+What's New, **draft for Luke's approval** (then into
+`app-store/metadata/en-US/release_notes.txt` and the Play release notes):
+
+> Press Hint twice to make the hinted move. After a solve, the arrow takes
+> you to the next puzzle, and once you reach the end it takes you back to the
+> first one you haven't solved.
+
+Still owed with this update: replace the two App Store solved screenshots
+that show the picture black (6.7"/6.9" #2 fish, iPad #2 moth); a sign script
+pinned to the merged commit (copy the 1.0.0 (3) one under
+`~/workspace/duo-release-20261114/sign/`).
