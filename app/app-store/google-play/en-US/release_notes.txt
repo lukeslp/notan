@@ -1,1 +1,1 @@
-First release.
+Press Hint twice to make the hinted move. After a solve, the arrow takes you to the next puzzle, and once you reach the end it takes you back to the first one you haven't solved.

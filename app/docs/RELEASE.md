@@ -166,14 +166,31 @@ Capacitor 8.5.3 source, not tapped. **Not run:** the unfolded Duo poses
 (folding needs a click in Device Hub), an Android emulator (the Android
 WebView is the Chromium checked above), a phone.
 
-What's New, **draft for Luke's approval** (then into
-`app-store/metadata/en-US/release_notes.txt` and the Play release notes):
+What's New, **approved by Luke 2026-11-18**, in
+`app-store/metadata/en-US/release_notes.txt` and
+`app-store/google-play/en-US/release_notes.txt`:
 
 > Press Hint twice to make the hinted move. After a solve, the arrow takes
 > you to the next puzzle, and once you reach the end it takes you back to the
 > first one you haven't solved.
 
-Still owed with this update: replace the two App Store solved screenshots
-that show the picture black (6.7"/6.9" #2 fish, iPad #2 moth); a sign script
-pinned to the merged commit (copy the 1.0.0 (3) one under
-`~/workspace/duo-release-20261114/sign/`).
+Store screenshots retaken 2026-11-18 from Debug builds of the merged code
+with `scripts/capture-duo.sh` (now also `phone` and `ipad`) on new
+simulators "Store iPhone 6.9 20261118" (iPhone 17 Pro Max) and "Store
+iPad 13 20261118" (iPad Pro 13" M5), iOS 27.2. The two black solved shots
+are fixed: `02-solved-fish.png` shows the fish in color with the continue
+disc, and the iPad's #2 is now the fish too (`02-solved-fish-ipad.png`,
+replacing the moth: the Debug `-NotanShot solved` scene stages only the
+fish, and adding a moth scene would change app code after the pin). The
+owl and levels shots changed slightly with the new code and were replaced;
+`03-dark-in-progress*` and `05-how-to-play` have no scene and were kept.
+
+Sign script: `~/workspace/release-1.0.1-20261118/sign/notan-1.0.1-4.sh` (run in Terminal.app on
+napoleon). It builds from a clean clone at the main commit that merges
+these store files, and refuses unless every build input under `app/`
+(all but docs, store copy and capture scripts) matches the 1.0.1 merge
+`fb9f6a1`. It signs Android with the existing release key, stages the AAB
+and notes in `~/workspace/play-uploads/to-upload/`, then archives, checks,
+validates and uploads the iOS build to App Store Connect. Nothing is
+attached to a version or submitted. The App Store screenshots above go up
+with the 1.0.1 version, once its build is processed.

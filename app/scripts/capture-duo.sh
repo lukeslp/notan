@@ -1,7 +1,8 @@
 #!/bin/bash
-# Store screenshots of Notan on the iPhone Duo simulator, outer or inner screen.
+# Store screenshots of Notan from a simulator: the iPhone Duo's outer or inner
+# screen, the 6.9" iPhone or the 13" iPad.
 #
-#   scripts/capture-duo.sh <udid> <outer|inner> <outdir> [path/to/App.app]
+#   scripts/capture-duo.sh <udid> <outer|inner|phone|ipad> <outdir> [path/to/App.app]
 #
 # Needs a Debug build: the scenes come from the Debug-only `-NotanShot` launch
 # argument (StoreShot in ios/App/App/AppDelegate.swift), so no taps are needed.
@@ -10,6 +11,8 @@
 #   outer  folded Duo, `simctl io --display=1`, 1398x2034
 #   inner  unfolded Duo (Device Hub), `--display=LCD-1`, 2007x2853 portrait or
 #          2853x2007 landscape
+#   phone  6.9" iPhone (17 Pro Max), 1320x2868
+#   ipad   13" iPad Pro, 2064x2752
 #
 # Shots: 01-in-progress.png (Owl), 02-solved.png (Fish), 03-levels-dark.png.
 # Each one is refused when it is the wrong size, black, a blank page (the game
@@ -25,7 +28,7 @@
 # per scene (default 120; a first launch on a busy Mac can take 30 s to paint).
 set -uo pipefail
 
-usage() { echo "usage: $0 <udid> <outer|inner> <outdir> [path/to/App.app]" >&2; exit 2; }
+usage() { echo "usage: $0 <udid> <outer|inner|phone|ipad> <outdir> [path/to/App.app]" >&2; exit 2; }
 [ $# -ge 3 ] || usage
 UDID=$1; SCREEN=$2; OUT=$3; APP=${4:-}
 BUNDLE=com.playnotan.app
@@ -34,6 +37,8 @@ TIMEOUT=${NOTAN_TIMEOUT:-120}
 case "$SCREEN" in
   outer) DISPLAY_ARG=1;     SIZES="1398x2034" ;;
   inner) DISPLAY_ARG=LCD-1; SIZES="2007x2853 2853x2007" ;;
+  phone) DISPLAY_ARG=primary; SIZES="1320x2868" ;;
+  ipad)  DISPLAY_ARG=primary; SIZES="2064x2752" ;;
   *) usage ;;
 esac
 command -v magick >/dev/null || { echo "needs ImageMagick 7 (magick)" >&2; exit 1; }
