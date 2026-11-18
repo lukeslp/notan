@@ -149,9 +149,22 @@ Checked on napoleon 2026-11-18, side by side with the web copy and Minimal
 0.5.11's `build/html` (Playwright at 390×844, light and dark, Chromium and
 WebKit): Settings identical to the web (Minimal adds only Collection
 scores), the continue disc the same 64 px disc at the same spot, Help the
-same, no page errors. `pnpm smoke` green. **Not run yet** (napoleon was short
-on memory, and io and Beast cannot build iOS): a simulator or phone build,
-the Duo poses and the external-link row in DEVICE_VERIFY.md.
+same, no page errors. `pnpm smoke` green.
+
+Simulator, 2026-11-18 (napoleon, Xcode 27.2, iOS 27.2 iPhone Duo sim
+"Slant Duo 20261114", folded outer screen): Debug build, `scripts/capture-duo.sh … outer`
+scenes solved, in progress and levels all accepted; the solved scene shows
+the new continue disc. `simctl launch --console-pty` printed `WebView
+loaded`, no UIScene line and no errors. The other outer shots are
+pixel-identical to 1.0's; `iphone-duo-outer/02-solved.png` was replaced
+with the new disc. On the folded screen the toolbar stops short of the
+trailing edge: that is iOS's status-bar column beside the camera, and 1.0
+did the same. External links: no `allowNavigation` is set, so Capacitor
+opens any outside host in Safari (iOS `WebViewDelegationHandler`) or the
+browser (Android `Bridge.launchIntent`, `ACTION_VIEW`); read in the
+Capacitor 8.5.3 source, not tapped. **Not run:** the unfolded Duo poses
+(folding needs a click in Device Hub), an Android emulator (the Android
+WebView is the Chromium checked above), a phone.
 
 What's New, **draft for Luke's approval** (then into
 `app-store/metadata/en-US/release_notes.txt` and the Play release notes):
