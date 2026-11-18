@@ -136,7 +136,7 @@
   const cursor = $('.cursor'), hintEl = $('.hint'), caption = $('#caption'), capName = $('#cap-name'), nextBtn = $('#next-btn');
   const lvlBtn = $('#lvl-btn'), lvlText = $('#lvl-text'), clock = $('#clock'), live = $('#live');
   const undoBtn = $('#undo-btn'), modeBtn = $('#mode-btn'), helpBtn = $('#help-btn');
-  const shareBtn = $('#share-btn');
+  const shareBtn = $('#share-btn'), endLine = $('#end-line');
   const help = $('#help'), levels = $('#levels'), lvGrid = $('#lv-grid'), lvMeta = $('#lv-meta'), sizesEl = $('#sizes');
   const settings = $('#settings'), settingsBtn = $('#settings-btn');
   const resetConfirm = $('#reset-confirm'), hintBtn = $('#hint-btn');
@@ -197,13 +197,15 @@
     renderQuickChoices();
 
     // If focus was on the old board or its Next button, keep it on the board.
-    const refocus = caption.contains(document.activeElement) || grid.contains(document.activeElement);
+    const refocus = caption.contains(document.activeElement) || nextBtn === document.activeElement || grid.contains(document.activeElement);
     // Drop the solved state without animating the new board in from the old offset.
     board.classList.add('instant');
     board.classList.remove('solved');
     caption.classList.remove('show');
     caption.hidden = true;
     unlockNotice.hidden = true;
+    nextBtn.hidden = true;
+    endLine.hidden = true;
     build();
     layout();
     renderAll();
@@ -301,6 +303,8 @@
     const dx = Math.round(tx - g.left - k * g.cw), dy = Math.round(ty - g.top - k * g.ch);
     board.style.cssText = `--cell:${g.cell}px;--f:${g.f}px;--cw:${g.cw}px;--ch:${g.ch}px;--dot:${Math.max(3, Math.round(g.cell * 0.16))}px;--solved:translate(${dx}px,${dy}px) scale(${k.toFixed(4)});left:${g.left}px;top:${g.top}px;width:${bw}px;height:${bh}px`;
     caption.style.top = Math.round(ty + ph + 14) + 'px';
+    // The picture's place once solved, for the control frame: the disc stands under it and its caption.
+    S.print = { x: Math.round(tx), y: Math.round(ty), w: pw, h: ph };
     showBands(S.bandAt == null ? -1 : S.bandAt);
     placeCursor();
     placeHint();
@@ -544,15 +548,19 @@
    * recently changed first. Otherwise it rings a square the board already
    * settles and the clue that settles it, preferring a square to fill:
    * empty squares never have to be marked, so "leave this empty" helps less.
-   * Every board can be finished line by line, so a correct board always has one. */
+   * Every board can be finished line by line, so a correct board always has one.
+   * A square in a locked line is rung only when no other square will do. */
   function findHint() {
     const { w, h, sol, rows, cols } = S.puz;
     const wrong = (i) => (S.cells[i] === INK && sol[i] !== 1) || (S.cells[i] === MARK && sol[i] === 1);
+    const free = (i) => !isLocked(i);
+    let held = null;
     for (let k = S.undo.length - 1; k >= 0; k--) {
       const snap = S.undo[k];
-      for (let i = 0; i < snap.length; i++) if (snap[i] !== S.cells[i] && wrong(i)) return { i, wrong: true };
+      for (let i = 0; i < snap.length; i++) if (snap[i] !== S.cells[i] && wrong(i)) { if (free(i)) return { i, wrong: true }; if (!held) held = { i, wrong: true }; }
     }
-    for (let i = 0; i < S.cells.length; i++) if (wrong(i)) return { i, wrong: true };
+    for (let i = 0; i < S.cells.length; i++) if (wrong(i)) { if (free(i)) return { i, wrong: true }; if (!held) held = { i, wrong: true }; }
+    if (held) return held;
     const known = Array.from(S.cells, (v) => (v === INK ? 1 : v === MARK ? 0 : -1));
     const lines = [];
     for (let r = 0; r < h; r++) lines.push({ kind: 'row', k: r, clue: rows[r], idx: Array.from({ length: w }, (_, c) => r * w + c) });
@@ -564,11 +572,13 @@
       if (res) L.idx.forEach((i, n) => { if (line[n] === -1 && res[n] !== -1) (res[n] === 1 ? fill : empty).push(i); });
       return { fill, empty };
     };
-    let best = null, spare = null;
+    let best = null, spare = null, heldFill = null, heldEmpty = null;
     for (const L of lines) {
-      const { fill, empty } = settle(L, known);
+      const settled = settle(L, known), fill = settled.fill.filter(free), empty = settled.empty.filter(free);
       if (fill.length && (!best || fill.length > best.weight)) best = { weight: fill.length, kind: L.kind, k: L.k, i: fill[0], fill: true };
       if (empty.length && !spare) spare = { kind: L.kind, k: L.k, i: empty[0], fill: false };
+      if (settled.fill.length && !heldFill) heldFill = { kind: L.kind, k: L.k, i: settled.fill[0], fill: true };
+      if (settled.empty.length && !heldEmpty) heldEmpty = { kind: L.kind, k: L.k, i: settled.empty[0], fill: false };
     }
     if (best) return best;
     // No line settles a square to fill from what is on the board. A player who
@@ -579,11 +589,13 @@
       changed = false;
       for (const L of lines) {
         const { fill, empty } = settle(L, ahead);
-        if (fill.length) return { kind: L.kind, k: L.k, i: fill[0], fill: true };
+        const open = fill.find(free);
+        if (open !== undefined) return { kind: L.kind, k: L.k, i: open, fill: true };
+        for (const i of fill) { ahead[i] = 1; changed = true; }
         for (const i of empty) { ahead[i] = 0; changed = true; }
       }
     }
-    return spare;
+    return spare || heldFill || heldEmpty;
   }
   function placeHint() {
     if (!S.hint || !S.geo) return;
@@ -597,8 +609,20 @@
     hintEl.classList.remove('on', 'wrong', 'fill', 'empty');
     grid.querySelectorAll('.clue.hinted').forEach((n) => n.classList.remove('hinted'));
   }
+  /* What a second press puts in the hinted square: a wrong square takes its answer,
+   * cleared rather than marked when it belongs empty (empties never have to be marked). */
+  function hintMove(hint) {
+    if (hint.wrong) return S.puz.sol[hint.i] === 1 ? INK : BLANK;
+    return hint.fill ? INK : MARK;
+  }
   function showHint() {
     if (!S.puz || S.solved) return;
+    // A second press while the ring is still up makes that move, as a tap would.
+    // Any change to the board takes the ring down first, so it always fits.
+    if (S.hint && !S.drag && !isLocked(S.hint.i)) {
+      const to = hintMove(S.hint);
+      if (S.cells[S.hint.i] !== to) { act(S.hint.i, to); return; }
+    }
     const hint = findHint();
     if (!hint) { announce('No hint: every square is already settled'); return; }
     clearHint();
@@ -614,9 +638,9 @@
     hintEl.classList.add('on');
     setFocus(hint.i, true);
     const w = S.puz.w, r = Math.floor(hint.i / w) + 1, c = hint.i % w + 1;
-    announce(hint.wrong
-      ? 'Hint: row ' + r + ', column ' + c + ' is wrong' + (isLocked(hint.i) ? ', and its line is locked' : '') + '.'
-      : 'Hint: row ' + r + ', column ' + c + (hint.fill ? ' can be filled.' : ' stays empty.'));
+    const again = { [INK]: ' Hint again fills it.', [MARK]: ' Hint again marks it.', [BLANK]: ' Hint again clears it.' }[hintMove(hint)];
+    announce('Hint: row ' + r + ', column ' + c + (hint.wrong ? ' is wrong' : hint.fill ? ' can be filled' : ' stays empty') +
+      (isLocked(hint.i) ? ', and its line is locked.' : '.' + again));
   }
 
   /* ---------- solved ---------- */
@@ -628,6 +652,8 @@
     S.solvedAt = performance.now();
     stopClock();
     const p = S.puz;
+    // Every level and New Game+ level solved: said once, on the solve that does it.
+    const all = RAMP.length + PLUS.length, solvedCount = () => RAMP.concat(PLUS).filter((q) => typeof save.solved[q.id] === 'number').length, had = solvedCount();
     if (p.endless) {
       save.endless = { size: p.size, seed: newSeed(), c: '', t: 0 };
     } else {
@@ -649,18 +675,29 @@
     placeCursor();
     board.classList.add('solved');
     capName.textContent = p.name;
-    unlockNotice.hidden = p.endless || p.plus || p.index !== RAMP.length - 1;
+    const allDone = !quiet && !p.endless && had < all && solvedCount() === all;
+    // The caption keeps the name and the New Game+ notice; the end of everything is the end line above Next.
+    unlockNotice.textContent = 'New Game+ unlocked';
+    unlockNotice.hidden = allDone || p.endless || p.plus || p.index !== RAMP.length - 1;
+    endLine.textContent = 'All ' + all + ' boards solved.';
+    endLine.hidden = !allDone;
     shareBtn.hidden = !p.endless;
     shareBtn.textContent = 'Share blank';
-    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : 'Choose what to play next');
+    const replay = !p.endless && !(p.index + 1 < sequence(p).length) && !(!p.plus && save.plusUnlocked) && !firstUnsolved();
+    nextBtn.setAttribute('aria-label', p.endless ? 'Next board' : !p.plus && p.index === RAMP.length - 1 ? 'Start New Game+' : p.index + 1 < sequence(p).length ? 'Next level' : !replay ? 'First unsolved level' : 'Replay from board 1');
+    nextBtn.querySelector('path').setAttribute('d', replay ? REPLAY_ICON : NEXT_ICON);
     caption.hidden = false;
     layout();
     requestAnimationFrame(() => requestAnimationFrame(() => caption.classList.add('show')));
+    // Next comes at the solve, as the picture settles; focus stays where it was.
+    nextBtn.hidden = false;
     hud();
-    if (!quiet) announce((!unlockNotice.hidden ? 'New Game+ unlocked. ' : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
-    // Keyboard players land on Next; pointer players just tap anywhere.
-    if (S.kbd) nextBtn.focus({ preventScroll: true });
+    const said = !endLine.hidden ? endLine.textContent : !unlockNotice.hidden ? unlockNotice.textContent : '';
+    if (!quiet) announce((said ? said.replace(/\.?$/, '. ') : '') + 'Solved: ' + p.name + ', in ' + fmt(S.time) + '. Press Enter for the next one.');
   }
+  const NEXT_ICON = 'M5 12h14M13 6l6 6-6 6', REPLAY_ICON = 'M4 11V9a3 3 0 0 1 3-3h12m-3-3 3 3-3 3M20 13v2a3 3 0 0 1-3 3H5m3 3-3-3 3-3';
+  // Past the last level, the first level not yet solved, New Game+'s once it is open; with every level solved, level 1 again.
+  function firstUnsolved() { return RAMP.concat(save.plusUnlocked ? PLUS : []).find((q) => typeof save.solved[q.id] !== 'number'); }
   function next() {
     const p = S.puz;
     if (p.endless) open(endless(p.size, save.endless ? save.endless.seed : newSeed()));
@@ -670,7 +707,8 @@
       announce('New Game+ unlocked. ' + label(S.puz) + ', ' + S.puz.w + ' by ' + S.puz.h);
       return;
     }
-    else { openLevels(true); return; }
+    else if (firstUnsolved()) open(firstUnsolved());
+    else open(RAMP[0]);
     announce(label(S.puz) + ', ' + S.puz.w + ' by ' + S.puz.h);
   }
 
@@ -1055,4 +1093,15 @@
   open(initial());
   // How to play opens only from the ? button or the ? key, never on load (Luke, 2026-10-04).
   window.__notan = { S, RAMP, PLUS, open, next, endless, isSolved };
+  // What is painted, for the control frame: once solved, the picture where it settles and the caption's lines under it.
+  window.__minimalize = Object.freeze({ bounds() {
+    if (!S.solved || !S.print) return null;
+    const o = (board.offsetParent || document.body).getBoundingClientRect();
+    let x = o.left + S.print.x, y = o.top + S.print.y, r = x + S.print.w, b = y + S.print.h;
+    for (const n of caption.hidden ? [] : caption.children) {
+      if (n.hidden || n.classList.contains('control-completion') || !n.getClientRects().length) continue;
+      const q = n.getBoundingClientRect(); x = Math.min(x, q.left); y = Math.min(y, q.top); r = Math.max(r, q.right); b = Math.max(b, q.bottom);
+    }
+    return { x, y, width: r - x, height: b - y };
+  } });
 })();

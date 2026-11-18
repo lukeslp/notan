@@ -62,6 +62,36 @@ const {p,c}=await open({query:'?level=30'});let last=-1,repeats=0,steps=0;
 for(;steps<200&&!(await p.evaluate(()=>__notan.isSolved()));steps++){await p.locator('#hint-btn').click();const h=await p.evaluate(()=>({i:__notan.S.hint.i,fill:__notan.S.hint.fill,ring:document.querySelector('.hint').className}));if(h.i===last)repeats++;last=h.i;if(steps===0){ok(h.fill===true&&/\bfill\b/.test(h.ring),'the ring shows that the square is to be filled');ok(await p.locator('.hint').evaluate(n=>getComputedStyle(n,'::after').content!=='none'),'answer drawn inside the ring');}await p.locator('#grid .cell').nth(h.i).click();}
 await p.waitForFunction(()=>__notan.S.solved);ok(await p.evaluate(()=>!Array.from(__notan.S.cells).includes(2)),'hints alone finish level 30 with no square marked');eq(repeats,0,'no square is hinted twice running');await c.close();
 }
+// A second press on the bulb makes the ringed move as a tap would: one Undo step, saved, spoken the same way.
+{
+const {p,c}=await open({query:'?level=20'});
+const st=()=>p.evaluate(()=>{const S=__notan.S,b=JSON.parse(localStorage.getItem('ink.v1')).boards[S.puz.id];return{cells:Array.from(S.cells).join(''),hint:S.hint&&{i:S.hint.i,wrong:!!S.hint.wrong},undo:S.undo.length,ring:document.querySelector('.hint').classList.contains('on'),saved:b&&b.c}});
+const said=async()=>{await p.waitForTimeout(120);return p.locator('#live').textContent();};
+const bulb=()=>p.locator('#hint-btn').click(),tap=async(i,o)=>{await p.locator('#grid .cell').nth(i).click(o);await p.waitForTimeout(350);};
+const changed=(x,y)=>[...y].flatMap((v,i)=>v!==x[i]?[i]:[]);
+await bulb();const a=await st();ok(a.hint&&!a.hint.wrong&&a.ring&&a.undo===0,'one press rings a square and changes nothing');ok((await said()).endsWith('can be filled. Hint again fills it.'),'the hint says a second press fills it');
+await bulb();const b=await st();eq(changed(a.cells,b.cells),[a.hint.i],'a second press changes the ringed square only');eq(b.cells[a.hint.i],'1','and fills it');ok(!b.hint&&!b.ring&&b.undo===1,'the ring goes and the move is one Undo step');eq(b.saved,b.cells,'the hinted move is saved');eq(await said(),'filled','the move is spoken as a tap is');
+await p.locator('#undo-btn').click();eq((await st()).cells,a.cells,'Undo takes the hinted move back');
+// Mistakes: a wrong fill is cleared (empties never have to be marked); a wrong mark is filled.
+const sol=await p.evaluate(()=>Array.from(__notan.S.puz.sol)),w=await p.evaluate(()=>__notan.S.puz.w),row=i=>Math.floor(i/w),gap=sol.indexOf(0),full=sol.indexOf(1);
+await tap(gap);await bulb();eq((await st()).hint,{i:gap,wrong:true},'a wrong fill is ringed');ok((await said()).endsWith('is wrong. Hint again clears it.'),'the hint says a second press clears it');await bulb();eq((await st()).cells[gap],'0','a second press clears the wrong fill');
+await tap(full,{button:'right'});await bulb();eq((await st()).hint,{i:full,wrong:true},'a wrong mark is ringed');await bulb();eq((await st()).cells[full],'1','a second press fills the wrongly marked square');
+// A tap between the presses takes the ring down, so the next press shows a hint again.
+await bulb();const s1=await st(),other=sol.findIndex((v,i)=>v&&i!==s1.hint.i&&s1.cells[i]==='0');await tap(other);const s2=await st();ok(!s2.hint,'a tap takes the ring down');await bulb();const s3=await st();ok(s3.hint&&s3.cells===s2.cells,'so the next press shows a hint, not a move');
+// A locked line: an unlocked square comes first; a locked one keeps its refusal until the line is unlocked.
+await reset(p);const gap2=sol.findIndex((v,i)=>!v&&row(i)!==row(gap));await tap(gap2);await tap(gap);await p.locator('#grid .cell').nth(gap).focus();await p.keyboard.press('l');ok(await p.evaluate(r=>__notan.S.locks.row[r],row(gap)),'the row with the newest mistake is locked');
+await bulb();eq((await st()).hint,{i:gap2,wrong:true},'an unlocked wrong square is ringed before a locked one');await bulb();eq((await st()).cells[gap2],'0','and a second press clears it');
+await bulb();eq((await st()).hint,{i:gap,wrong:true},'then the locked one');ok((await said()).endsWith('is wrong, and its line is locked.'),'with its lock named, as before');const held=(await st()).cells;await bulb();eq((await st()).cells,held,'a second press leaves a locked line alone');
+await p.keyboard.press('l');await bulb();eq((await st()).cells[gap],'0','unlocked, the next press clears it');
+eq(await p.evaluate(()=>__notan.S.hinted),true,'the board remembers that it was hinted');await c.close();
+}
+// The bulb alone, two presses a square, finishes a generated board and a level with no square marked; a hinted best time is still remembered.
+for(const query of ['?endless=5&seed=81051','?level=12']){
+const {p,c}=await open({query});const ink=await p.evaluate(()=>Array.from(__notan.S.puz.sol).filter(Boolean).length);let presses=0;
+for(;presses<300&&!(await p.evaluate(()=>__notan.S.solved));presses++)await p.locator('#hint-btn').click();
+eq(presses,2*ink,'two presses per filled square finish '+query);ok(await p.evaluate(()=>!Array.from(__notan.S.cells).includes(2)),'no square marked on '+query);
+if(query==='?level=12')ok(await p.evaluate(()=>{const v=JSON.parse(localStorage.getItem('ink.v1'));return typeof v.solved.house==='number'&&v.hinted.house===true}),'the solve is kept and marked as hinted');await c.close();
+}
 // Finished numbers are unchanged from production; numerals scale with the board; a locked line's numbers are red.
 {
 const {p,c}=await open({query:'?level=1'});eq(await p.locator('.clue').first().evaluate(n=>parseFloat(getComputedStyle(n).fontSize)),20,'large numerals on a small board');
