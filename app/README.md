@@ -24,7 +24,7 @@ leave this folder alone. Keep that exclude.
 | App Store name | `Notan` (fallback `Notan Nonogram`) | The App Store requires a unique name; `Notan` may be taken. The home-screen name stays `Notan` either way (`CFBundleDisplayName`) |
 | Google Play title | `Notan: Nonogram` | Play titles need not be unique; the suffix helps search |
 | Android backup | Off | Matches Hexsweeper 1.0.10. Progress is one small `ink.v1` value; carrying it to a new phone would need Hexsweeper's `TravelingData` approach. A follow-up, not a blocker |
-| Version | 1.0.0, build 1 / versionCode 1 | Fresh records on both stores |
+| Version | 1.0.1, build 4 / versionCode 4 | 1.0 (3) is live; 1.0.1 is the first update |
 
 ## The names
 
