@@ -133,7 +133,7 @@ the owned batch in the LocalType releases F-Droid repository
 dr.eamer.dev downloads page. The APK holds no permissions and no trackers,
 which suits both.
 
-## 1.0.1 (4), prepared 2026-11-18: not signed, not uploaded
+## 1.0.1 (4), prepared 2026-11-18, signed and published 2026-11-19
 
 Brings the app to the game the web (playnotan.com) and Minimal Primitives
 0.5.11 run (game-riffs `4a9c688`; 1.0 (3) shipped `d6db95d`).
@@ -194,3 +194,13 @@ and notes in `~/workspace/play-uploads/to-upload/`, then archives, checks,
 validates and uploads the iOS build to App Store Connect. Nothing is
 attached to a version or submitted. The App Store screenshots above go up
 with the 1.0.1 version, once its build is processed.
+
+### Receipts, 2026-11-19
+
+- **Signed** by Luke (`~/workspace/release-1.0.1-20261118/sign/notan-1.0.1-4.log`), from main `9607355` (build inputs `fb9f6a1`). Signer `8dc97814…ebdfc0` on APK and AAB; `jarsigner -verify` passes on the staged AAB.
+  - APK `notan-1.0.1-4-00b27df6.apk` SHA-256 `00b27df67efe0170d367614b114d7358786ef6816267d8cf7e425ad865d2751b`; AAB SHA-256 `7b407c8577b45663ab143dc40735757e1d3d28e5993d9247dcfd299c61ee8beb`; IPA SHA-256 `843e707dc533bcd884b2336f76a052179f8de8ee87f67b3ff52b1b926e0ece74`. Files: `~/workspace/release-1.0.1-20261118/out/notan-1.0.1-4/`.
+- **TestFlight**: build 4 validated and uploaded about 00:01 PT; App Store Connect read it `VALID`, internal `IN_BETA_TESTING` (the internal group gets every build). No 1.0.1 App Store version yet: creating it, attaching build 4, the What's New and the new screenshots, and any submission wait on Luke.
+- **Google Play**: `~/workspace/play-uploads/to-upload/Notan-1.0.1-4.aab` with its `.notes.txt` (the approved What's New), row in that folder's README. Not uploaded; Luke drags it in.
+- **Direct download**: `https://dr.eamer.dev/downloads/android/notan/notan-1.0.1-4-00b27df6.apk`, hash checked over HTTPS; the page on dr.eamer.dev and lukesteuber.com links it. downloads-site `080de4c` (with the other app's 1.0.1), backup `~/backups/publish-downloads-20261119T084157Z` on Drummer; `audit-catalog --live-registry` exit 0; registry row android-release-toolkit PR 50, merged `d2560e1`.
+- **Hosted F-Droid**: target `20261119-slant-notan-1.0.1-b470087f` (downloads-site `f0196a3`) on top of `20261119-minimal-primitives-0.5.12-7ff2cc89`; 25 packages, 52 → 54 versions, only Slant 1.0.1 and Notan 1.0.1 added. Galactus workspace adopted (index `b449ea40…`). Batch `releases-20261119b.json`, localtype-keyboard PR 334, merged `a3911ed`. Scripts and logs: `~/workspace/release-1.0.1-20261118/publish/`.
+- **Still not run**: the unfolded Duo poses, a phone run of the signed build.
