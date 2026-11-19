@@ -1,0 +1,58 @@
+{
+  "6834676784": {
+    "20f09c6a70be6a2f879a04bd4c1e2762a174b6d4324471e07b1727b3ecdc4cc6": {
+      "assetId": "16c00019-760e-8430-8020-5490d6afa269",
+      "fileName": "02-solved-fish-ipad.png",
+      "recorded": "2026-11-19T11:43:23-0800",
+      "specId": "1751a63a-af79-5c7f-a2f2-41140bf28f9e"
+    },
+    "229b9ad1321e66e711c616849d3ec0e13e75daf6a0072641710723a0687d1654": {
+      "assetId": "72800019-760e-8430-801b-40f5c2df1f4b",
+      "fileName": "01-owl-in-progress.png",
+      "recorded": "2026-11-19T11:43:21-0800",
+      "specId": "bd402f1a-26ee-5b83-9dd7-972c60c43d47"
+    },
+    "34f1c2be4cb050f899c903bdee07626daf1535ce90e9dc8a3a70d66326a0e39b": {
+      "assetId": "35400019-760e-8430-801f-479adab4ebfa",
+      "fileName": "03-dark-in-progress.png",
+      "recorded": "2026-11-19T11:43:30-0800",
+      "specId": "bd402f1a-26ee-5b83-9dd7-972c60c43d47"
+    },
+    "52bc50e1496c794634543a48822d5ca29022f790e1d269b58ff7aec90cbdfe7c": {
+      "assetId": "45800019-760e-8430-8016-5fa602b2c93a",
+      "fileName": "03-dark-in-progress-ipad.png",
+      "recorded": "2026-11-19T11:43:28-0800",
+      "specId": "1751a63a-af79-5c7f-a2f2-41140bf28f9e"
+    },
+    "5df0bf30b7da8f6a940ce6c8086e1cac0c6f6408e3c137ca662c48113c6b5c3f": {
+      "assetId": "7d800019-760e-8430-8026-617b3a91d9d7",
+      "fileName": "01-owl-in-progress-ipad.png",
+      "recorded": "2026-11-19T11:43:19-0800",
+      "specId": "1751a63a-af79-5c7f-a2f2-41140bf28f9e"
+    },
+    "705a52db7de2f6de4ee5808a139f3d28fb58649ac4b4fc0c01f6d2f2a7c4362a": {
+      "assetId": "ff800019-760e-8430-8036-bc50ec9eb190",
+      "fileName": "04-levels-dark.png",
+      "recorded": "2026-11-19T11:43:34-0800",
+      "specId": "bd402f1a-26ee-5b83-9dd7-972c60c43d47"
+    },
+    "b279716333b3b38f7aaaba69a7f5fc7f50ef1f2ed56e2624c1beedf6e6682b8a": {
+      "assetId": "4cc00019-760e-8430-8009-811db6a4db2a",
+      "fileName": "05-how-to-play.png",
+      "recorded": "2026-11-19T11:43:37-0800",
+      "specId": "bd402f1a-26ee-5b83-9dd7-972c60c43d47"
+    },
+    "d2397b7d9e13b30d6a4ae77e5ba2b394c2c2147760c042a2a70be1edbb8563d6": {
+      "assetId": "b9400019-760e-8430-8031-b29777a9471f",
+      "fileName": "02-solved-fish.png",
+      "recorded": "2026-11-19T11:43:25-0800",
+      "specId": "bd402f1a-26ee-5b83-9dd7-972c60c43d47"
+    },
+    "d30676d373dc633b768809e2a440f776fcffd04ded45d1c1fb0959735a279235": {
+      "assetId": "22400019-760e-8430-803c-b1a22e185f09",
+      "fileName": "04-levels-dark-ipad.png",
+      "recorded": "2026-11-19T11:43:32-0800",
+      "specId": "1751a63a-af79-5c7f-a2f2-41140bf28f9e"
+    }
+  }
+}
