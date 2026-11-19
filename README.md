@@ -54,6 +54,14 @@ This checks that every level has one solution the line solver can finish, that t
 harder gradually, and that the generator only makes unique, line-solvable boards.
 
 ```
+node test-solvable.cjs [--seeds N]
+```
+
+This checks every level and N Quick play seeds per size (300 by default, from both the seeds the
+game deals and the ones old share links open) with a solver that shares no code with `engine.js`:
+each board must have exactly one answer, the stored picture, that line logic reaches without a guess.
+
+```
 npm i -D playwright-core && npx playwright install chromium
 node test-ui.cjs
 ```
