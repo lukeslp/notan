@@ -1,0 +1,22 @@
+{
+  "6834676784": {
+    "7167945a0565fc23b4aeefb8e3a2f41922898f60a34c50e89bb0fdd29c9da37f": {
+      "assetId": "49c00019-760e-8430-801a-bdd674112479",
+      "fileName": "03-levels-dark.png",
+      "recorded": "2026-11-19T11:43:54-0800",
+      "specId": "205e7ab6-a23a-4ee2-b327-0a99ec2a2520"
+    },
+    "aa49d05b9dcdb4d47aabfad2e9744d62ae037ad13bb90e47756beb7bcaa7a23d": {
+      "assetId": "d3400019-760e-8430-802c-200c7f9c7bf5",
+      "fileName": "01-in-progress.png",
+      "recorded": "2026-11-19T11:43:50-0800",
+      "specId": "205e7ab6-a23a-4ee2-b327-0a99ec2a2520"
+    },
+    "c1fe381bb6183d62a8848110ac91ab23f0a8b16956a07265a849b75e35793396": {
+      "assetId": "4b000019-760e-8430-8027-639b8e004fc9",
+      "fileName": "02-solved.png",
+      "recorded": "2026-11-19T11:43:52-0800",
+      "specId": "205e7ab6-a23a-4ee2-b327-0a99ec2a2520"
+    }
+  }
+}
